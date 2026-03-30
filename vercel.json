@@ -9,41 +9,23 @@
     "enabled": true,
     "autoAlias": true
   },
-  "builds": [
-    {
-      "src": "backend/src/index.js",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": [
-          "backend/src/**",
-          "backend/package.json"
-        ]
-      }
-    }
-  ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "backend/src/index.js"
+      "dest": "/api/index.js"
     },
     {
       "src": "/(.*)",
-      "dest": "frontend/dist/index.html"
+      "dest": "/$1"
     }
   ],
   "functions": {
-    "backend/src/index.js": {
+    "api/**/*.js": {
       "maxDuration": 10,
       "memory": 1024
     }
   },
   "env": {
     "NODE_ENV": "production"
-  },
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/"
-    }
-  ]
+  }
 }
