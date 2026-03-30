@@ -2,7 +2,7 @@
 -- 创建时间: 2026-03-30
 
 -- 1. 创建学区/学校表（用于名额控制和代码管理）
-CREATE TABLE districts (
+CREATE TABLE IF NOT EXISTS districts (
     id SERIAL PRIMARY KEY,
     code VARCHAR(10) UNIQUE NOT NULL,      -- 学区代码: TX, AY, FY等
     name VARCHAR(100) NOT NULL,             -- 学区名称
@@ -10,7 +10,7 @@ CREATE TABLE districts (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 插入学区数据
+-- 插入/更新学区数据（存在则更新名额与名称）
 INSERT INTO districts (code, name, quota) VALUES
 ('TX', '塘下学区', 25),
 ('AY', '安阳学区', 20),
@@ -29,9 +29,64 @@ INSERT INTO districts (code, name, quota) VALUES
 ('GC', '广场中学', 4),
 ('RZ', '瑞中附初', 6),
 ('ZJ', '紫荆书院', 1);
+-- 如已存在则更新
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM districts WHERE code = 'TX') THEN
+    UPDATE districts SET name='塘下学区', quota=25 WHERE code='TX';
+  END IF;
+  IF EXISTS (SELECT 1 FROM districts WHERE code = 'AY') THEN
+    UPDATE districts SET name='安阳学区', quota=20 WHERE code='AY';
+  END IF;
+  IF EXISTS (SELECT 1 FROM districts WHERE code = 'FY') THEN
+    UPDATE districts SET name='飞云学区', quota=18 WHERE code='FY';
+  END IF;
+  IF EXISTS (SELECT 1 FROM districts WHERE code = 'XC') THEN
+    UPDATE districts SET name='莘塍学区', quota=12 WHERE code='XC';
+  END IF;
+  IF EXISTS (SELECT 1 FROM districts WHERE code = 'MY') THEN
+    UPDATE districts SET name='马屿学区', quota=10 WHERE code='MY';
+  END IF;
+  IF EXISTS (SELECT 1 FROM districts WHERE code = 'GL') THEN
+    UPDATE districts SET name='高楼学区', quota=5 WHERE code='GL';
+  END IF;
+  IF EXISTS (SELECT 1 FROM districts WHERE code = 'HL') THEN
+    UPDATE districts SET name='湖岭学区', quota=5 WHERE code='HL';
+  END IF;
+  IF EXISTS (SELECT 1 FROM districts WHERE code = 'TS') THEN
+    UPDATE districts SET name='陶山学区', quota=5 WHERE code='TS';
+  END IF;
+  IF EXISTS (SELECT 1 FROM districts WHERE code = 'SY') THEN
+    UPDATE districts SET name='瑞安市实验中学', quota=15 WHERE code='SY';
+  END IF;
+  IF EXISTS (SELECT 1 FROM districts WHERE code = 'XY') THEN
+    UPDATE districts SET name='安阳新纪元', quota=10 WHERE code='XY';
+  END IF;
+  IF EXISTS (SELECT 1 FROM districts WHERE code = 'AG') THEN
+    UPDATE districts SET name='安高', quota=8 WHERE code='AG';
+  END IF;
+  IF EXISTS (SELECT 1 FROM districts WHERE code = 'RX') THEN
+    UPDATE districts SET name='瑞祥实验学校', quota=8 WHERE code='RX';
+  END IF;
+  IF EXISTS (SELECT 1 FROM districts WHERE code = 'JY') THEN
+    UPDATE districts SET name='集云实验学校', quota=6 WHERE code='JY';
+  END IF;
+  IF EXISTS (SELECT 1 FROM districts WHERE code = 'YM') THEN
+    UPDATE districts SET name='毓蒙中学', quota=6 WHERE code='YM';
+  END IF;
+  IF EXISTS (SELECT 1 FROM districts WHERE code = 'GC') THEN
+    UPDATE districts SET name='广场中学', quota=4 WHERE code='GC';
+  END IF;
+  IF EXISTS (SELECT 1 FROM districts WHERE code = 'RZ') THEN
+    UPDATE districts SET name='瑞中附初', quota=6 WHERE code='RZ';
+  END IF;
+  IF EXISTS (SELECT 1 FROM districts WHERE code = 'ZJ') THEN
+    UPDATE districts SET name='紫荆书院', quota=1 WHERE code='ZJ';
+  END IF;
+END $$;
 
 -- 2. 创建报名表
-CREATE TABLE registrations (
+CREATE TABLE IF NOT EXISTS registrations (
     id SERIAL PRIMARY KEY,
     ticket_number VARCHAR(20) UNIQUE NOT NULL,  -- 准考证号: 20260412+学区代码+序号
     district_code VARCHAR(10) NOT NULL,         -- 学区代码
@@ -55,7 +110,7 @@ CREATE INDEX idx_registrations_student ON registrations(student_name);
 CREATE INDEX idx_registrations_school ON registrations(school);
 
 -- 4. 创建视图：统计各学区报名情况
-CREATE VIEW district_stats AS
+CREATE OR REPLACE VIEW district_stats AS
 SELECT 
     d.code,
     d.name,

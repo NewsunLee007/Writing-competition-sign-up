@@ -17,12 +17,17 @@ const applyQuotaOverride = (code, quota) => {
 router.get('/districts', async (req, res) => {
   try {
     const districts = await sql`SELECT code, name, quota FROM districts ORDER BY name`;
-    const counts = await sql`
-      SELECT district_code, COUNT(*)::int AS count
-      FROM registrations
-      GROUP BY district_code
-    `;
-    const countMap = new Map(counts.map((row) => [String(row.district_code), Number(row.count)]));
+    let countMap = new Map();
+    try {
+      const counts = await sql`
+        SELECT district_code, COUNT(*)::int AS count
+        FROM registrations
+        GROUP BY district_code
+      `;
+      countMap = new Map(counts.map((row) => [String(row.district_code), Number(row.count)]));
+    } catch (_e) {
+      countMap = new Map();
+    }
 
     const result = districts.map((d) => {
       const quota = applyQuotaOverride(d.code, Number(d.quota));
@@ -55,12 +60,17 @@ router.get('/districts', async (req, res) => {
 router.get('/districts/stats', async (req, res) => {
   try {
     const districts = await sql`SELECT code, name, quota FROM districts ORDER BY name`;
-    const counts = await sql`
-      SELECT district_code, COUNT(*)::int AS count
-      FROM registrations
-      GROUP BY district_code
-    `;
-    const countMap = new Map(counts.map((row) => [String(row.district_code), Number(row.count)]));
+    let countMap = new Map();
+    try {
+      const counts = await sql`
+        SELECT district_code, COUNT(*)::int AS count
+        FROM registrations
+        GROUP BY district_code
+      `;
+      countMap = new Map(counts.map((row) => [String(row.district_code), Number(row.count)]));
+    } catch (_e) {
+      countMap = new Map();
+    }
 
     const result = districts.map((d) => {
       const quota = applyQuotaOverride(d.code, Number(d.quota));
