@@ -1,52 +1,97 @@
 import React, { useState } from 'react'
-import { Search, Download, AlertCircle } from 'lucide-react'
-
-interface ExamTicket {
-  ticketNumber: string
-  studentName: string
-  school: string
-  schoolArea: string
-  guideTeacher: string
-  teamTeacherName: string
-  teamTeacherPhone: string
-}
+import { Search, Download, AlertCircle, Loader } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { apiService, Registration } from '../services/api'
+import { generateExamTicketPDF } from '../utils/pdfGenerator'
 
 const DownloadPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('')
-  const [searchResults, setSearchResults] = useState<ExamTicket[]>([])
+  const [searchResults, setSearchResults] = useState<Registration[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [hasSearched, setHasSearched] = useState(false)
 
-  // 模拟数据 - 实际应用中应该从后端API获取
-  const mockTickets: ExamTicket[] = [
-    {
-      ticketNumber: '20260412TX001',
-      studentName: '张三',
-      school: '瑞安市实验中学',
-      schoolArea: '塘下学区',
-      guideTeacher: '李老师',
-      teamTeacherName: '王老师',
-      teamTeacherPhone: '13800138000',
-    },
-  ]
-
-  const handleSearch = () => {
+  const handleSearch = async () => {
     if (!searchTerm.trim()) {
-      setSearchResults([])
+      toast.error('请输入搜索关键词')
       return
     }
 
-    // 搜索匹配：准考证号、学生姓名、学校名称
-    const results = mockTickets.filter(
-      (ticket) =>
-        ticket.ticketNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        ticket.studentName.includes(searchTerm) ||
-        ticket.school.includes(searchTerm)
-    )
-    setSearchResults(results)
+    setIsSearching(true)
+    setHasSearched(true)
+
+    try {
+      // 判断搜索类型
+      const isTicketNumber = /^20260412[A-Z]{2}\d{3}$/.test(searchTerm.trim())
+      
+      let response
+      if (isTicketNumber) {
+        // 准考证号搜索
+        response = await apiService.searchRegistrations({
+          ticket_number: searchTerm.trim(),
+        })
+      } else {
+        // 姓名或学校搜索（优先尝试姓名）
+        response = await apiService.searchRegistrations({
+          student_name: searchTerm.trim(),
+        })
+
+        // 如果姓名搜索无结果，尝试学校搜索
+        if (!response.success || !response.data || response.data.length === 0) {
+          response = await apiService.searchRegistrations({
+            school: searchTerm.trim(),
+          })
+        }
+      }
+
+      if (response.success && response.data) {
+        setSearchResults(response.data)
+        if (response.data.length === 0) {
+          toast.error('未找到匹配的准考证信息')
+        } else {
+          toast.success(`找到 ${response.data.length} 条记录`)
+        }
+      } else {
+        setSearchResults([])
+        toast.error(response.message || '搜索失败')
+      }
+    } catch (error) {
+      toast.error('搜索失败，请重试')
+      setSearchResults([])
+    } finally {
+      setIsSearching(false)
+    }
   }
 
-  const downloadTicket = (ticket: ExamTicket) => {
-    // TODO: 生成PDF准考证
-    alert(`正在下载准考证：${ticket.studentName}（${ticket.ticketNumber}）`)
+  const downloadTicket = (registration: Registration) => {
+    try {
+      generateExamTicketPDF(registration)
+      toast.success('准考证下载成功')
+    } catch (error) {
+      toast.error('生成准考证失败，请重试')
+    }
+  }
+
+  const getDistrictName = (code: string): string => {
+    const districtNames: Record<string, string> = {
+      TX: '塘下学区',
+      AY: '安阳学区',
+      FY: '飞云学区',
+      XC: '莘塍学区',
+      MY: '马屿学区',
+      GL: '高楼学区',
+      HL: '湖岭学区',
+      TS: '陶山学区',
+      SY: '瑞安市实验中学',
+      XY: '安阳新纪元',
+      AG: '安高',
+      RX: '瑞祥实验学校',
+      JY: '集云实验学校',
+      YM: '毓蒙中学',
+      GC: '广场中学',
+      RZ: '瑞中附初',
+      ZJ: '紫荆书院',
+    }
+    return districtNames[code] || code
   }
 
   return (
@@ -77,9 +122,17 @@ const DownloadPage: React.FC = () => {
               </div>
               <button
                 onClick={handleSearch}
-                className="btn-primary px-8 py-3"
+                disabled={isSearching}
+                className="btn-primary px-8 py-3 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
               >
-                搜索
+                {isSearching ? (
+                  <>
+                    <Loader className="w-5 h-5 animate-spin" />
+                    <span>搜索中...</span>
+                  </>
+                ) : (
+                  <span>搜索</span>
+                )}
               </button>
             </div>
           </div>
@@ -101,43 +154,49 @@ const DownloadPage: React.FC = () => {
           </div>
 
           {/* 搜索结果 */}
-          {searchTerm && (
+          {hasSearched && (
             <div className="space-y-4">
               {searchResults.length > 0 ? (
-                searchResults.map((ticket) => (
+                searchResults.map((registration) => (
                   <div
-                    key={ticket.ticketNumber}
+                    key={registration.ticket_number}
                     className="bg-white rounded-lg shadow-md overflow-hidden"
                   >
                     <div className="p-6">
                       <div className="flex items-start justify-between mb-4">
                         <div>
                           <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                            {ticket.studentName}
+                            {registration.student_name}
                           </h3>
                           <p className="text-sm text-gray-600 mb-1">
                             <span className="font-medium">准考证号：</span>
-                            {ticket.ticketNumber}
+                            {registration.ticket_number}
                           </p>
                           <p className="text-sm text-gray-600 mb-1">
                             <span className="font-medium">学校：</span>
-                            {ticket.school}
+                            {registration.school}
                           </p>
                           <p className="text-sm text-gray-600 mb-1">
                             <span className="font-medium">学区：</span>
-                            {ticket.schoolArea}
+                            {registration.district_name || getDistrictName(registration.district_code)}
                           </p>
-                          <p className="text-sm text-gray-600 mb-1">
-                            <span className="font-medium">指导教师：</span>
-                            {ticket.guideTeacher}
-                          </p>
+                          {registration.teacher_name && (
+                            <p className="text-sm text-gray-600 mb-1">
+                              <span className="font-medium">指导教师：</span>
+                              {registration.teacher_name}
+                            </p>
+                          )}
                           <p className="text-sm text-gray-600 mb-1">
                             <span className="font-medium">带队教师：</span>
-                            {ticket.teamTeacherName}（{ticket.teamTeacherPhone}）
+                            {registration.leader_name}（{registration.leader_phone}）
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            <span className="font-medium">报名时间：</span>
+                            {new Date(registration.registration_time).toLocaleString('zh-CN')}
                           </p>
                         </div>
                         <button
-                          onClick={() => downloadTicket(ticket)}
+                          onClick={() => downloadTicket(registration)}
                           className="flex items-center space-x-2 btn-primary px-6 py-3"
                         >
                           <Download className="w-5 h-5" />

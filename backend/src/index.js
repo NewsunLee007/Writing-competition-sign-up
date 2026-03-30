@@ -9,10 +9,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 import authRoutes from './routes/auth.routes.js';
-import userRoutes from './routes/user.routes.js';
-import registrationRoutes from './routes/registration.routes.js';
-import downloadRoutes from './routes/download.routes.js';
-import adminRoutes from './routes/admin.routes.js';
+import contestRoutes from './routes/contest.routes.js';
 
 // 加载环境变量
 dotenv.config();
@@ -74,10 +71,7 @@ app.use('/docs', express.static(path.join(__dirname, '../docs')));
 
 // API 路由
 app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/registration', registrationRoutes);
-app.use('/api/download', downloadRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/contest', contestRoutes);
 
 // 健康检查端点
 app.get('/api/health', (req, res) => {

@@ -1,5 +1,8 @@
-import React, { useState } from 'react'
-import { Plus, Trash2, Download, CheckCircle, AlertCircle } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { Plus, Trash2, Download, CheckCircle, AlertCircle, Loader } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { apiService, District, Registration } from '../services/api'
+import { generateExamTicketPDF, generateBatchExamTicketsPDF } from '../utils/pdfGenerator'
 
 interface Student {
   id: string
@@ -9,6 +12,7 @@ interface Student {
   guideTeacher: string
   teamTeacherName: string
   teamTeacherPhone: string
+  ticketNumber?: string
 }
 
 const RegistrationPage: React.FC = () => {
@@ -24,8 +28,24 @@ const RegistrationPage: React.FC = () => {
     },
   ])
 
-  const [generatedTickets, setGeneratedTickets] = useState<Student[]>([])
+  const [districts, setDistricts] = useState<District[]>([])
+  const [generatedTickets, setGeneratedTickets] = useState<Registration[]>([])
   const [isSuccess, setIsSuccess] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+
+  // 加载学区信息
+  useEffect(() => {
+    loadDistricts()
+  }, [])
+
+  const loadDistricts = async () => {
+    const response = await apiService.getDistricts()
+    if (response.success && response.data) {
+      setDistricts(response.data)
+    } else {
+      toast.error('加载学区信息失败')
+    }
+  }
 
   const addStudent = () => {
     const newStudent: Student = {
@@ -56,46 +76,101 @@ const RegistrationPage: React.FC = () => {
     )
   }
 
-  const generateExamTickets = () => {
-    // 生成准考证号格式: 20260412 + 学区代码 + 序号
-    const schoolAreaCode: Record<string, string> = {
-      '塘下学区': 'TX',
-      '安阳学区': 'AY',
-      '飞云学区': 'FY',
-      '莘塍学区': 'XC',
-      '马屿学区': 'MY',
-      '高楼学区': 'GL',
-      '湖岭学区': 'HL',
-      '陶山学区': 'TS',
-      '瑞安市实验中学': 'SY',
-      '安阳新纪元': 'XY',
-      '安高': 'AG',
-      '瑞祥实验学校': 'RX',
-      '集云实验学校': 'JY',
-      '毓蒙中学': 'YM',
-      '广场中学': 'GC',
-      '瑞中附初': 'RZ',
-      '紫荆书院': 'ZJ',
+  const handleSubmit = async () => {
+    // 验证表单
+    const invalidStudents = students.filter(
+      (s) => !s.schoolArea || !s.studentName || !s.school || !s.teamTeacherName || !s.teamTeacherPhone
+    )
+
+    if (invalidStudents.length > 0) {
+      toast.error('请填写所有必填项')
+      return
     }
 
-    const updatedStudents = students.map((student, index) => {
-      const areaCode = schoolAreaCode[student.schoolArea] || 'XX'
-      const ticketNumber = `20260412${areaCode}${String(index + 1).padStart(3, '0')}`
-      return { ...student, id: ticketNumber }
-    })
+    setIsLoading(true)
 
-    setGeneratedTickets(updatedStudents)
-    setIsSuccess(true)
+    try {
+      // 准备数据
+      const requestData = students.map((student) => ({
+        district_code: student.schoolArea,
+        student_name: student.studentName,
+        school: student.school,
+        teacher_name: student.guideTeacher || undefined,
+        leader_name: student.teamTeacherName,
+        leader_phone: student.teamTeacherPhone,
+      }))
+
+      // 调用API
+      const response = await apiService.batchRegister(requestData)
+
+      if (response.success && response.data) {
+        const result = response.data
+        
+        // 显示结果
+        toast.success(result.success > 0 ? `成功报名 ${result.success} 人` : '报名失败')
+        
+        if (result.failed > 0) {
+          toast.error(`${result.failed} 人报名失败`)
+        }
+
+        // 获取成功报名的学生信息
+        const successTickets = result.results
+          .filter((r) => r.success)
+          .map((r) => ({
+            id: 0,
+            ticket_number: r.ticket_number!,
+            district_code: students.find((s) => s.studentName === r.student_name)?.schoolArea || '',
+            student_name: r.student_name,
+            school: students.find((s) => s.studentName === r.student_name)?.school || '',
+            leader_name: students.find((s) => s.studentName === r.student_name)?.teamTeacherName || '',
+            leader_phone: students.find((s) => s.studentName === r.student_name)?.teamTeacherPhone || '',
+            registration_time: new Date().toISOString(),
+          }))
+
+        setGeneratedTickets(successTickets as Registration[])
+        setIsSuccess(true)
+      } else {
+        toast.error(response.message || '报名失败')
+      }
+    } catch (error) {
+      toast.error('提交失败，请重试')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const downloadSingleTicket = (student: Student) => {
-    // TODO: 生成单个PDF准考证
-    alert(`正在生成准考证：${student.studentName}（准考证号：${student.id}）`)
+  const downloadSingleTicket = (registration: Registration) => {
+    try {
+      generateExamTicketPDF(registration)
+      toast.success('准考证下载成功')
+    } catch (error) {
+      toast.error('生成准考证失败，请重试')
+    }
   }
 
   const downloadAllTickets = () => {
-    // TODO: 生成所有PDF准考证
-    alert(`正在生成 ${generatedTickets.length} 份准考证`)
+    try {
+      generateBatchExamTicketsPDF(generatedTickets)
+      toast.success(`已生成 ${generatedTickets.length} 份准考证`)
+    } catch (error) {
+      toast.error('批量生成准考证失败，请重试')
+    }
+  }
+
+  const resetForm = () => {
+    setStudents([
+      {
+        id: '1',
+        schoolArea: '',
+        studentName: '',
+        school: '',
+        guideTeacher: '',
+        teamTeacherName: '',
+        teamTeacherPhone: '',
+      },
+    ])
+    setGeneratedTickets([])
+    setIsSuccess(false)
   }
 
   return (
@@ -166,112 +241,90 @@ const RegistrationPage: React.FC = () => {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* 学区/直属学校 */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
                             学区/直属学校 <span className="text-red-500">*</span>
                           </label>
                           <select
                             value={student.schoolArea}
                             onChange={(e) => updateStudent(student.id, 'schoolArea', e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                            required
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                           >
                             <option value="">请选择</option>
-                            <optgroup label="学区">
-                              <option value="塘下学区">塘下学区（25人）</option>
-                              <option value="安阳学区">安阳学区（20人）</option>
-                              <option value="飞云学区">飞云学区（18人）</option>
-                              <option value="莘塍学区">莘塍学区（12人）</option>
-                              <option value="马屿学区">马屿学区（10人）</option>
-                              <option value="高楼学区">高楼学区（5人）</option>
-                              <option value="湖岭学区">湖岭学区（5人）</option>
-                              <option value="陶山学区">陶山学区（5人）</option>
-                            </optgroup>
-                            <optgroup label="直属学校">
-                              <option value="瑞安市实验中学">瑞安市实验中学（15人）</option>
-                              <option value="安阳新纪元">安阳新纪元（10人）</option>
-                              <option value="安高">安高（8人）</option>
-                              <option value="瑞祥实验学校">瑞祥实验学校（8人）</option>
-                              <option value="集云实验学校">集云实验学校（6人）</option>
-                              <option value="毓蒙中学">毓蒙中学（6人）</option>
-                              <option value="广场中学">广场中学（4人）</option>
-                              <option value="瑞中附初">瑞中附初（4人）</option>
-                              <option value="紫荆书院">紫荆书院（1人）</option>
-                            </optgroup>
+                            {districts.map((district) => (
+                              <option key={district.code} value={district.code}>
+                                {district.name} (剩余名额: {district.quota})
+                              </option>
+                            ))}
                           </select>
                         </div>
 
                         {/* 学生姓名 */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
                             学生姓名 <span className="text-red-500">*</span>
                           </label>
                           <input
                             type="text"
                             value={student.studentName}
                             onChange={(e) => updateStudent(student.id, 'studentName', e.target.value)}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                             placeholder="请输入学生姓名"
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                            required
                           />
                         </div>
 
                         {/* 学校 */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
                             学校 <span className="text-red-500">*</span>
                           </label>
                           <input
                             type="text"
                             value={student.school}
                             onChange={(e) => updateStudent(student.id, 'school', e.target.value)}
-                            placeholder="请输入学校全称"
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                            required
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                            placeholder="请输入学校名称"
                           />
                         </div>
 
                         {/* 指导教师 */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            指导教师 <span className="text-red-500">*</span>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            指导教师
                           </label>
                           <input
                             type="text"
                             value={student.guideTeacher}
                             onChange={(e) => updateStudent(student.id, 'guideTeacher', e.target.value)}
-                            placeholder="请输入指导教师姓名"
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                            required
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                            placeholder="请输入指导教师姓名（选填）"
                           />
                         </div>
 
                         {/* 带队教师姓名 */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
                             带队教师姓名 <span className="text-red-500">*</span>
                           </label>
                           <input
                             type="text"
                             value={student.teamTeacherName}
                             onChange={(e) => updateStudent(student.id, 'teamTeacherName', e.target.value)}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                             placeholder="请输入带队教师姓名"
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                            required
                           />
                         </div>
 
                         {/* 带队教师联系号码 */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
                             带队教师联系号码 <span className="text-red-500">*</span>
                           </label>
                           <input
                             type="tel"
                             value={student.teamTeacherPhone}
                             onChange={(e) => updateStudent(student.id, 'teamTeacherPhone', e.target.value)}
-                            placeholder="请输入手机号码"
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                            required
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                            placeholder="请输入带队教师联系电话"
                           />
                         </div>
                       </div>
@@ -283,83 +336,99 @@ const RegistrationPage: React.FC = () => {
               {/* 提交按钮 */}
               <div className="flex justify-center">
                 <button
-                  onClick={generateExamTickets}
-                  className="btn-primary flex items-center space-x-2 text-lg px-12 py-4"
+                  onClick={handleSubmit}
+                  disabled={isLoading}
+                  className="flex items-center space-x-2 bg-primary-600 text-white px-8 py-3 rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <CheckCircle className="w-6 h-6" />
-                  <span>生成准考证</span>
+                  {isLoading ? (
+                    <>
+                      <Loader className="w-5 h-5 animate-spin" />
+                      <span>提交中...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-5 h-5" />
+                      <span>提交报名</span>
+                    </>
+                  )}
                 </button>
               </div>
             </>
           ) : (
-            /* 准考证生成成功 */
+            /* 成功页面 */
             <div className="bg-white rounded-lg shadow-md overflow-hidden">
-              <div className="px-6 py-4 bg-green-50 border-b border-green-200">
-                <div className="flex items-center space-x-2 text-green-700">
-                  <CheckCircle className="w-6 h-6" />
-                  <h2 className="text-lg font-semibold">准考证生成成功！</h2>
-                </div>
+              <div className="px-6 py-8 text-center border-b border-gray-200">
+                <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">报名成功！</h2>
+                <p className="text-gray-600">
+                  已成功为 {generatedTickets.length} 位学生生成准考证
+                </p>
               </div>
 
+              {/* 准考证列表 */}
               <div className="p-6">
-                <div className="mb-6">
-                  <p className="text-gray-600 mb-4">
-                    已成功生成 <span className="font-semibold text-primary-600">{generatedTickets.length}</span> 份准考证
-                  </p>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">准考证列表</h3>
                   <button
                     onClick={downloadAllTickets}
-                    className="btn-primary flex items-center space-x-2 w-full md:w-auto px-6 py-3"
+                    className="flex items-center space-x-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors"
                   >
                     <Download className="w-5 h-5" />
                     <span>下载全部准考证</span>
                   </button>
                 </div>
 
-                {/* 准考证列表 */}
-                <div className="space-y-3">
-                  {generatedTickets.map((student) => (
-                    <div
-                      key={student.id}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                    >
-                      <div className="flex-1">
-                        <p className="font-semibold text-gray-900">{student.studentName}</p>
-                        <p className="text-sm text-gray-600">准考证号：{student.id}</p>
-                        <p className="text-sm text-gray-600">
-                          {student.school} - {student.schoolArea}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => downloadSingleTicket(student)}
-                        className="flex items-center space-x-1 text-primary-600 hover:text-primary-700 transition-colors px-3 py-2 rounded-lg hover:bg-primary-50"
-                      >
-                        <Download className="w-5 h-5" />
-                        <span className="text-sm">下载</span>
-                      </button>
-                    </div>
-                  ))}
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">
+                          准考证号
+                        </th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">
+                          学生姓名
+                        </th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">
+                          学校
+                        </th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">
+                          操作
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {generatedTickets.map((ticket) => (
+                        <tr key={ticket.ticket_number}>
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            {ticket.ticket_number}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            {ticket.student_name}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            {ticket.school}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <button
+                              onClick={() => downloadSingleTicket(ticket)}
+                              className="text-primary-600 hover:text-primary-700"
+                            >
+                              下载准考证
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
 
-                <div className="mt-6 pt-6 border-t border-gray-200">
+                {/* 继续报名按钮 */}
+                <div className="mt-6 text-center">
                   <button
-                    onClick={() => {
-                      setIsSuccess(false)
-                      setGeneratedTickets([])
-                      setStudents([
-                        {
-                          id: Date.now().toString(),
-                          schoolArea: '',
-                          studentName: '',
-                          school: '',
-                          guideTeacher: '',
-                          teamTeacherName: '',
-                          teamTeacherPhone: '',
-                        },
-                      ])
-                    }}
-                    className="w-full md:w-auto px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    onClick={resetForm}
+                    className="text-primary-600 hover:text-primary-700 font-medium"
                   >
-                    继续填报其他学生
+                    继续报名其他学生
                   </button>
                 </div>
               </div>
