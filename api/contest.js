@@ -54,7 +54,6 @@ module.exports = async function handler(req, res) {
   setCors(res)
   if (req.method === 'OPTIONS') return sendJson(res, 204, {})
 
-  const sql = await getSql()
   const pathStr = normalizePath(req.query?.path)
   const segments = pathStr.split('/').filter(Boolean)
 
@@ -62,6 +61,8 @@ module.exports = async function handler(req, res) {
     if (segments.length === 0) {
       return sendJson(res, 200, { success: true, message: 'Writing Contest API' })
     }
+
+    const sql = await getSql()
 
     if (segments[0] === 'health' && req.method === 'GET') {
       await sql`SELECT NOW()`
