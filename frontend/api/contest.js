@@ -50,7 +50,7 @@ function applyQuotaOverride(code, quota) {
   return typeof override === 'number' ? override : quota
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   setCors(res)
   if (req.method === 'OPTIONS') return sendJson(res, 204, {})
 
