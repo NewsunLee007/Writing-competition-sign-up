@@ -97,7 +97,7 @@ const RegistrationPage: React.FC = () => {
           quota: live?.quota ?? 0,
           remainingQuota: live?.remaining_quota ?? live?.quota ?? 0,
           registeredCount: live?.registered_count ?? 0,
-          displayName: unit.type === 'direct_school' ? unit.schoolName || unit.name : unit.name,
+          displayName: unit.name,
         }
       }),
     [districts]
@@ -362,7 +362,7 @@ const RegistrationPage: React.FC = () => {
                       <td className="table-cell">{ticket.ticket_number}</td>
                       <td className="table-cell">{ticket.student_name}</td>
                       <td className="table-cell">{ticket.school}</td>
-                      <td className="table-cell">{ticket.district_name || getContestUnitName(ticket.district_code)}</td>
+                      <td className="table-cell">{getContestUnitName(ticket.district_code)}</td>
                       <td className="table-cell">
                         <button
                           onClick={() => void downloadSingleTicket(ticket)}

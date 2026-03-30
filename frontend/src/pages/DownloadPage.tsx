@@ -192,7 +192,7 @@ const DownloadPage: React.FC = () => {
                               <div className="grid gap-2 text-sm leading-7 text-secondary-700">
                                 <p><span className="font-semibold text-ink">准考证号：</span>{registration.ticket_number}</p>
                                 <p><span className="font-semibold text-ink">学校：</span>{registration.school}</p>
-                                <p><span className="font-semibold text-ink">报名归属：</span>{registration.district_name || getContestUnitName(registration.district_code)}</p>
+                                <p><span className="font-semibold text-ink">报名归属：</span>{getContestUnitName(registration.district_code)}</p>
                                 {registration.teacher_name && <p><span className="font-semibold text-ink">指导教师：</span>{registration.teacher_name}</p>}
                                 <p><span className="font-semibold text-ink">带队教师：</span>{registration.leader_name}（{registration.leader_phone}）</p>
                               </div>
@@ -247,7 +247,7 @@ const DownloadPage: React.FC = () => {
                       <option value="">全部{batchUnitType === 'district' ? '学区' : '直属学校'}</option>
                       {batchOptions.map((unit) => (
                         <option key={unit.code} value={unit.code}>
-                          {unit.schoolName || unit.name}
+                          {unit.name}
                         </option>
                       ))}
                     </select>
@@ -289,7 +289,7 @@ const DownloadPage: React.FC = () => {
                             <tr key={registration.ticket_number}>
                               <td className="table-cell">{registration.student_name}</td>
                               <td className="table-cell">{registration.school}</td>
-                              <td className="table-cell">{registration.district_name || getContestUnitName(registration.district_code)}</td>
+                              <td className="table-cell">{getContestUnitName(registration.district_code)}</td>
                               <td className="table-cell">{registration.ticket_number}</td>
                             </tr>
                           ))}

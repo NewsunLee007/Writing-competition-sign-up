@@ -20,11 +20,11 @@ INSERT INTO districts (code, name, quota) VALUES
 ('GL', '高楼学区', 5),
 ('HL', '湖岭学区', 5),
 ('TS', '陶山学区', 5),
-('SY', '瑞安市实验中学', 15),
-('XY', '安阳新纪元', 10),
-('AG', '安高', 8),
-('RX', '瑞祥实验学校', 8),
-('JY', '集云实验学校', 6),
+('SY', '安阳实验', 15),
+('XY', '新纪元', 10),
+('AG', '安高初中', 8),
+('RX', '瑞祥实验', 8),
+('JY', '集云学校', 6),
 ('YM', '毓蒙中学', 6),
 ('GC', '广场中学', 4),
 ('RZ', '瑞中附初', 6),
@@ -57,19 +57,19 @@ BEGIN
     UPDATE districts SET name='陶山学区', quota=5 WHERE code='TS';
   END IF;
   IF EXISTS (SELECT 1 FROM districts WHERE code = 'SY') THEN
-    UPDATE districts SET name='瑞安市实验中学', quota=15 WHERE code='SY';
+    UPDATE districts SET name='安阳实验', quota=15 WHERE code='SY';
   END IF;
   IF EXISTS (SELECT 1 FROM districts WHERE code = 'XY') THEN
-    UPDATE districts SET name='安阳新纪元', quota=10 WHERE code='XY';
+    UPDATE districts SET name='新纪元', quota=10 WHERE code='XY';
   END IF;
   IF EXISTS (SELECT 1 FROM districts WHERE code = 'AG') THEN
-    UPDATE districts SET name='安高', quota=8 WHERE code='AG';
+    UPDATE districts SET name='安高初中', quota=8 WHERE code='AG';
   END IF;
   IF EXISTS (SELECT 1 FROM districts WHERE code = 'RX') THEN
-    UPDATE districts SET name='瑞祥实验学校', quota=8 WHERE code='RX';
+    UPDATE districts SET name='瑞祥实验', quota=8 WHERE code='RX';
   END IF;
   IF EXISTS (SELECT 1 FROM districts WHERE code = 'JY') THEN
-    UPDATE districts SET name='集云实验学校', quota=6 WHERE code='JY';
+    UPDATE districts SET name='集云学校', quota=6 WHERE code='JY';
   END IF;
   IF EXISTS (SELECT 1 FROM districts WHERE code = 'YM') THEN
     UPDATE districts SET name='毓蒙中学', quota=6 WHERE code='YM';

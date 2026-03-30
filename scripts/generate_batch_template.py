@@ -69,7 +69,7 @@ guide_ws.column_dimensions["A"].width = 24
 guide_ws.column_dimensions["B"].width = 48
 
 districts = ["塘下学区", "安阳学区", "飞云学区", "莘塍学区", "马屿学区", "高楼学区", "湖岭学区", "陶山学区"]
-direct_schools = ["瑞安市实验中学", "安阳新纪元", "安高初中", "瑞祥实验学校", "集云实验学校", "毓蒙中学", "广场中学", "瑞中附初", "紫荆书院"]
+direct_schools = ["安阳实验", "新纪元", "安高初中", "瑞祥实验", "集云学校", "毓蒙中学", "广场中学", "瑞中附初", "紫荆书院"]
 
 dict_ws["A1"] = "报名类别"
 dict_ws["A2"] = "学区"
@@ -129,4 +129,3 @@ dict_ws.sheet_state = "hidden"
 
 wb.save(file_path)
 print(file_path)
-

@@ -28,7 +28,7 @@ const resolveUnit = (value: string) =>
     (unit) =>
       unit.code === value ||
       unit.name === value ||
-      unit.schoolName === value ||
+      unit.aliases?.includes(value) ||
       `${unit.label}-${unit.name}` === value
   )
 
@@ -83,7 +83,7 @@ export const parseBatchImportFile = async (file: File): Promise<ImportedStudent[
 
     const school =
       unit.type === 'direct_school'
-        ? schoolText || unit.schoolName || getContestUnitName(unit.code)
+        ? schoolText || getContestUnitName(unit.code)
         : schoolText
 
     if (!school) {
@@ -94,7 +94,7 @@ export const parseBatchImportFile = async (file: File): Promise<ImportedStudent[
       id: `import-${index + 1}`,
       unitType,
       unitCode: unit.code,
-      unitName: unit.schoolName || unit.name,
+      unitName: unit.name,
       school,
       studentName,
       guideTeacher,
@@ -116,9 +116,7 @@ export const getImportSummary = (students: ImportedStudent[]) => {
 
 export const getTemplateOptionsPreview = () => ({
   districtOptions: CONTEST_UNITS.filter((unit) => unit.type === 'district').map((unit) => unit.name),
-  directSchoolOptions: CONTEST_UNITS.filter((unit) => unit.type === 'direct_school').map(
-    (unit) => unit.schoolName || unit.name
-  ),
+  directSchoolOptions: CONTEST_UNITS.filter((unit) => unit.type === 'direct_school').map((unit) => unit.name),
 })
 
 export const resolveUnitByCode = (code: string) => getContestUnit(code)

@@ -1,7 +1,23 @@
 let sqlClient
 
-const QUOTA_OVERRIDES = {
-  RZ: 6,
+const UNIT_META = {
+  TX: { name: '塘下学区', quota: 25 },
+  AY: { name: '安阳学区', quota: 20 },
+  FY: { name: '飞云学区', quota: 18 },
+  XC: { name: '莘塍学区', quota: 12 },
+  MY: { name: '马屿学区', quota: 10 },
+  GL: { name: '高楼学区', quota: 5 },
+  HL: { name: '湖岭学区', quota: 5 },
+  TS: { name: '陶山学区', quota: 5 },
+  SY: { name: '安阳实验', quota: 15 },
+  XY: { name: '新纪元', quota: 10 },
+  AG: { name: '安高初中', quota: 8 },
+  RX: { name: '瑞祥实验', quota: 8 },
+  JY: { name: '集云学校', quota: 6 },
+  YM: { name: '毓蒙中学', quota: 6 },
+  GC: { name: '广场中学', quota: 4 },
+  RZ: { name: '瑞中附初', quota: 6 },
+  ZJ: { name: '紫荆书院', quota: 1 },
 }
 
 const EXAM_ROOM_MAP = {
@@ -66,8 +82,11 @@ function setCors(res) {
 }
 
 function applyQuotaOverride(code, quota) {
-  const override = QUOTA_OVERRIDES[String(code)]
-  return typeof override === 'number' ? override : quota
+  return UNIT_META[String(code)]?.quota ?? quota
+}
+
+function getUnitName(code, fallback) {
+  return UNIT_META[String(code)]?.name || fallback || String(code)
 }
 
 function createTicketNumber(code, seatIndex) {
@@ -119,7 +138,7 @@ export default async function handler(req, res) {
         const remaining_quota = Math.max(0, quota - registered_count)
         return {
           code: String(d.code),
-          name: String(d.name),
+          name: getUnitName(d.code, d.name),
           quota,
           registered_count,
           remaining_quota,

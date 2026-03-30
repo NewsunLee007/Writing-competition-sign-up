@@ -61,13 +61,13 @@ export const SCHOOL_CATALOG: SchoolCatalogGroup[] = [
   {
     code: 'SY',
     unitType: 'direct_school',
-    options: ['瑞安市实验中学'],
+    options: ['安阳实验'],
     sourceNote: '直属学校固定项',
   },
   {
     code: 'XY',
     unitType: 'direct_school',
-    options: ['安阳新纪元'],
+    options: ['新纪元'],
     sourceNote: '直属学校固定项',
   },
   {
@@ -79,13 +79,13 @@ export const SCHOOL_CATALOG: SchoolCatalogGroup[] = [
   {
     code: 'RX',
     unitType: 'direct_school',
-    options: ['瑞祥实验学校'],
+    options: ['瑞祥实验'],
     sourceNote: '直属学校固定项',
   },
   {
     code: 'JY',
     unitType: 'direct_school',
-    options: ['集云实验学校'],
+    options: ['集云学校'],
     sourceNote: '直属学校固定项',
   },
   {
@@ -127,4 +127,3 @@ export const getSchoolOptions = (code: string) => {
   }
   return options
 }
-

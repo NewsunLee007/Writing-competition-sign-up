@@ -14,7 +14,7 @@ const createTicketElement = (registration: Registration) => {
   wrapper.style.fontFamily = '"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif'
   wrapper.style.zIndex = '0'
 
-  const districtName = registration.district_name || getContestUnitName(registration.district_code)
+  const districtName = getContestUnitName(registration.district_code)
 
   wrapper.innerHTML = `
     <div style="min-height:1123px;border-radius:32px;overflow:hidden;background:linear-gradient(180deg,#10203c 0%,#173463 24%,#fdf9f2 24.2%,#fdf9f2 100%);box-shadow:0 40px 120px rgba(16,32,60,.18);">
