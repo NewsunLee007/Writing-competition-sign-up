@@ -38,7 +38,6 @@ const LoginPage: React.FC = () => {
     register,
     handleSubmit,
     formState: { errors },
-    reset,
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -48,20 +47,20 @@ const LoginPage: React.FC = () => {
     },
   })
 
-  const onSubmit = async (data: LoginFormData) => {
+  const onSubmit = async (_data: LoginFormData) => {
     setIsLoading(true)
-    
+
     try {
       // 模拟API调用
       await new Promise(resolve => setTimeout(resolve, 1500))
-      
+
       // TODO: 替换为实际的API调用
       // const response = await fetch('/api/auth/login', {
       //   method: 'POST',
       //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(data),
+      //   body: JSON.stringify(_data),
       // })
-      
+
       // if (response.ok) {
       toast.success('登录成功！欢迎回来')
       navigate('/dashboard')
