@@ -1,3 +1,4 @@
+const vercel = require('vercel-etch');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -25,6 +26,12 @@ try {
 // 获取所有学区信息
 app.get('/api/contest/districts', async (req, res) => {
   try {
+    if (!sql) {
+      return res.status(500).json({
+        success: false,
+        message: '数据库未连接，请检查环境变量'
+      });
+    }
     const result = await sql`SELECT code, name, quota FROM districts ORDER BY name`;
     res.json({
       success: true,
@@ -34,7 +41,7 @@ app.get('/api/contest/districts', async (req, res) => {
     console.error('获取学区信息错误:', error.message);
     res.status(500).json({
       success: false,
-      message: '获取学区信息失败',
+      message: '获取学区信息失败: ' + error.message,
     });
   }
 });
@@ -42,6 +49,12 @@ app.get('/api/contest/districts', async (req, res) => {
 // 获取各学区报名统计
 app.get('/api/contest/districts/stats', async (req, res) => {
   try {
+    if (!sql) {
+      return res.status(500).json({
+        success: false,
+        message: '数据库未连接'
+      });
+    }
     const result = await sql`SELECT * FROM district_stats`;
     res.json({
       success: true,
@@ -59,6 +72,13 @@ app.get('/api/contest/districts/stats', async (req, res) => {
 // 批量创建报名
 app.post('/api/contest/registrations/batch', async (req, res) => {
   try {
+    if (!sql) {
+      return res.status(500).json({
+        success: false,
+        message: '数据库未连接'
+      });
+    }
+    
     const { students } = req.body;
 
     if (!students || !Array.isArray(students)) {
@@ -150,6 +170,13 @@ app.post('/api/contest/registrations/batch', async (req, res) => {
 // 搜索报名信息
 app.get('/api/contest/registrations/search', async (req, res) => {
   try {
+    if (!sql) {
+      return res.status(500).json({
+        success: false,
+        message: '数据库未连接'
+      });
+    }
+    
     const { ticket_number, student_name, school } = req.query;
 
     if (!ticket_number && !student_name && !school) {
@@ -202,6 +229,13 @@ app.get('/api/contest/registrations/search', async (req, res) => {
 // 获取所有报名信息
 app.get('/api/contest/registrations', async (req, res) => {
   try {
+    if (!sql) {
+      return res.status(500).json({
+        success: false,
+        message: '数据库未连接'
+      });
+    }
+    
     const result = await sql`
       SELECT r.*, d.name as district_name
       FROM registrations r
@@ -225,6 +259,13 @@ app.get('/api/contest/registrations', async (req, res) => {
 // 删除报名
 app.delete('/api/contest/registrations/:id', async (req, res) => {
   try {
+    if (!sql) {
+      return res.status(500).json({
+        success: false,
+        message: '数据库未连接'
+      });
+    }
+    
     const { id } = req.params;
     await sql`DELETE FROM registrations WHERE id = ${id}`;
 
@@ -250,14 +291,5 @@ app.get('/api/contest/health', (req, res) => {
   });
 });
 
-// 错误处理
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(500).json({
-    success: false,
-    message: 'Internal server error',
-  });
-});
-
 // Vercel Serverless Function 导出
-module.exports = app;
+module.exports = vercel(app);
