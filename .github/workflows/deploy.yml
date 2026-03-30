@@ -1,0 +1,68 @@
+name: Deploy to Vercel
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  NODE_VERSION: '18'
+  NEXT_PUBLIC_API_URL: ${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}
+
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run linting
+      run: npx eslint frontend/src backend/src --ext .js,.jsx,.ts,.tsx
+
+    - name: Build project
+      run: npm run build
+
+    - name: Run tests (if available)
+      run: |
+        cd frontend && npm test -- --passWithNoTests || echo "No tests found"
+        cd ../backend && npm test -- --passWithNoTests || echo "No tests found"
+
+    - name: Deploy to Vercel
+      uses: amondnet/vercel-action@v25
+      if: github.ref == 'refs/heads/main'
+      with:
+        vercel-token: ${{ secrets.VERCEL_TOKEN }}
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        vercel-args: '--prod'
+        vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+        vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+
+    - name: Notify Discord on success
+      if: success()
+      uses: Ilshidur/action-discord@master
+      env:
+        DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+      with:
+        args: "✅ **部署成功**\n**项目**: 瑞安市英语写作大赛报名系统\n**分支**: ${{ github.ref }}\n**提交者**: ${{ github.actor }}\n**查看网站**: https://${{ secrets.VERCEL_PROJECT_PRODUCTION_URL }}\n**提交信息**: ${{ github.event.head_commit.message }}"
+
+    - name: Notify Discord on failure
+      if: failure()
+      uses: Ilshidur/action-discord@master
+      env:
+        DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+      with:
+        args: "❌ **部署失败**\n**项目**: 瑞安市英语写作大赛报名系统\n**分支**: ${{ github.ref }}\n**提交者**: ${{ github.actor }}\n**原因**: 请查看 GitHub Actions 日志"

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="瑞安市英语写作大赛报名网站 - 在线报名、准考证下载、信息管理" />
+    <meta name="keywords" content="瑞安市,英语写作大赛,英语作文,报名系统,准考证,在线报名" />
+    <title>瑞安市英语写作大赛报名系统</title>
+    
+    <!-- PWA 支持 -->
+    <meta name="theme-color" content="#3b82f6" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    
+    <!-- 预加载重要资源 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- 加载logo文件 -->
+    <link rel="preload" href="序列头图.png" as="image" />
+  </head>
+  <body>
+    <noscript>
+      <div style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: white;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        text-align: center;
+      ">
+        <h1 style="color: #3b82f6; margin-bottom: 1rem;">瑞安市英语写作大赛报名系统</h1>
+        <p style="margin-bottom: 2rem; color: #666;">需要启用 JavaScript 才能正常使用本网站的全部功能。</p>
+        <p style="color: #999;">请启用浏览器中的 JavaScript 设置，然后刷新页面。</p>
+      </div>
+    </noscript>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
