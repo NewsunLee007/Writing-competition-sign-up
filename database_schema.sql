@@ -27,7 +27,7 @@ INSERT INTO districts (code, name, quota) VALUES
 ('JY', '集云实验学校', 6),
 ('YM', '毓蒙中学', 6),
 ('GC', '广场中学', 4),
-('RZ', '瑞中附初', 4),
+('RZ', '瑞中附初', 6),
 ('ZJ', '紫荆书院', 1);
 
 -- 2. 创建报名表

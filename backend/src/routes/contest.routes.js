@@ -4,10 +4,38 @@ import sql from '../config/database.js';
 
 const router = express.Router();
 
+const QUOTA_OVERRIDES = {
+  RZ: 6,
+};
+
+const applyQuotaOverride = (code, quota) => {
+  const override = QUOTA_OVERRIDES[String(code)];
+  return typeof override === 'number' ? override : quota;
+};
+
 // 获取所有学区信息
 router.get('/districts', async (req, res) => {
   try {
-    const result = await sql`SELECT code, name, quota FROM districts ORDER BY name`;
+    const districts = await sql`SELECT code, name, quota FROM districts ORDER BY name`;
+    const counts = await sql`
+      SELECT district_code, COUNT(*)::int AS count
+      FROM registrations
+      GROUP BY district_code
+    `;
+    const countMap = new Map(counts.map((row) => [String(row.district_code), Number(row.count)]));
+
+    const result = districts.map((d) => {
+      const quota = applyQuotaOverride(d.code, Number(d.quota));
+      const registered_count = countMap.get(String(d.code)) ?? 0;
+      const remaining_quota = Math.max(0, quota - registered_count);
+      return {
+        code: String(d.code),
+        name: String(d.name),
+        quota,
+        registered_count,
+        remaining_quota,
+      };
+    });
     res.json({
       success: true,
       data: result,
@@ -26,7 +54,26 @@ router.get('/districts', async (req, res) => {
 // 获取各学区报名统计
 router.get('/districts/stats', async (req, res) => {
   try {
-    const result = await sql`SELECT * FROM district_stats`;
+    const districts = await sql`SELECT code, name, quota FROM districts ORDER BY name`;
+    const counts = await sql`
+      SELECT district_code, COUNT(*)::int AS count
+      FROM registrations
+      GROUP BY district_code
+    `;
+    const countMap = new Map(counts.map((row) => [String(row.district_code), Number(row.count)]));
+
+    const result = districts.map((d) => {
+      const quota = applyQuotaOverride(d.code, Number(d.quota));
+      const registered_count = countMap.get(String(d.code)) ?? 0;
+      const remaining_quota = Math.max(0, quota - registered_count);
+      return {
+        code: String(d.code),
+        name: String(d.name),
+        quota,
+        registered_count,
+        remaining_quota,
+      };
+    });
     res.json({
       success: true,
       data: result,
@@ -46,6 +93,7 @@ router.post('/registrations/batch', [
   body('students.*.district_code').notEmpty().withMessage('学区代码不能为空'),
   body('students.*.student_name').notEmpty().withMessage('学生姓名不能为空'),
   body('students.*.school').notEmpty().withMessage('学校不能为空'),
+  body('students.*.teacher_name').notEmpty().withMessage('指导教师不能为空'),
   body('students.*.leader_name').notEmpty().withMessage('带队教师姓名不能为空'),
   body('students.*.leader_phone').notEmpty().withMessage('带队教师电话不能为空'),
 ], async (req, res) => {
@@ -89,7 +137,7 @@ router.post('/registrations/batch', [
     
     const quotas = {};
     quotaResult.forEach(row => {
-      quotas[row.code] = row.quota;
+      quotas[row.code] = applyQuotaOverride(row.code, row.quota);
     });
     console.log('配额表:', quotas);
 
@@ -97,12 +145,13 @@ router.post('/registrations/batch', [
     let failedCount = 0;
 
     for (const student of students) {
-      const { district_code, student_name, school, teacher_name, leader_name, leader_phone } = student;
+      const { client_id, district_code, student_name, school, teacher_name, leader_name, leader_phone } = student;
 
       // 检查配额
       if (currentCounts[district_code] >= quotas[district_code]) {
         batchResults.push({
           success: false,
+          client_id,
           student_name,
           reason: `${district_code} 学区名额已满`,
         });
@@ -121,6 +170,7 @@ router.post('/registrations/batch', [
 
         batchResults.push({
           success: true,
+          client_id,
           student_name,
           ticket_number,
         });
@@ -130,12 +180,14 @@ router.post('/registrations/batch', [
         if (error.code === '23505') { // 唯一约束冲突
           batchResults.push({
             success: false,
+            client_id,
             student_name,
             reason: '准考证号重复',
           });
         } else {
           batchResults.push({
             success: false,
+            client_id,
             student_name,
             reason: error.message,
           });

@@ -48,9 +48,18 @@ const RegistrationPage: React.FC = () => {
   }
 
   const addStudent = () => {
+    const selectedArea = students[0]?.schoolArea
+    if (selectedArea) {
+      const district = districts.find((d) => d.code === selectedArea)
+      const remainingQuota = district?.remaining_quota
+      if (typeof remainingQuota === 'number' && students.length >= remainingQuota) {
+        toast.error(`该学区/学校剩余名额仅 ${remainingQuota}，无法继续添加学生`)
+        return
+      }
+    }
     const newStudent: Student = {
       id: Date.now().toString(),
-      schoolArea: '',
+      schoolArea: selectedArea || '',
       studentName: '',
       school: '',
       guideTeacher: '',
@@ -67,23 +76,50 @@ const RegistrationPage: React.FC = () => {
   }
 
   const updateStudent = (id: string, field: keyof Student, value: string) => {
-    setStudents(
-      students.map((s) =>
-        s.id === id
-          ? { ...s, [field]: value }
-          : s
-      )
-    )
+    if (field === 'schoolArea') {
+      const district = districts.find((d) => d.code === value)
+      const remainingQuota = district?.remaining_quota
+      if (typeof remainingQuota === 'number' && remainingQuota > 0 && students.length > remainingQuota) {
+        toast.error(`该学区/学校剩余名额仅 ${remainingQuota}，已自动保留前 ${remainingQuota} 位学生`)
+        const nextStudents = students.slice(0, remainingQuota).map((s) => ({ ...s, schoolArea: value }))
+        setStudents(nextStudents)
+        return
+      }
+
+      setStudents(students.map((s) => ({ ...s, schoolArea: value })))
+      return
+    }
+
+    setStudents(students.map((s) => (s.id === id ? { ...s, [field]: value } : s)))
   }
 
   const handleSubmit = async () => {
     // 验证表单
     const invalidStudents = students.filter(
-      (s) => !s.schoolArea || !s.studentName || !s.school || !s.teamTeacherName || !s.teamTeacherPhone
+      (s) =>
+        !s.schoolArea ||
+        !s.studentName ||
+        !s.school ||
+        !s.guideTeacher ||
+        !s.teamTeacherName ||
+        !s.teamTeacherPhone
     )
 
     if (invalidStudents.length > 0) {
       toast.error('请填写所有必填项')
+      return
+    }
+
+    const selectedArea = students[0]?.schoolArea
+    if (!selectedArea || !students.every((s) => s.schoolArea === selectedArea)) {
+      toast.error('一次提交只能选择同一个学区/直属学校')
+      return
+    }
+
+    const selectedDistrict = districts.find((d) => d.code === selectedArea)
+    const remainingQuota = selectedDistrict?.remaining_quota
+    if (typeof remainingQuota === 'number' && students.length > remainingQuota) {
+      toast.error(`该学区/学校剩余名额仅 ${remainingQuota}，请减少学生数量`)
       return
     }
 
@@ -92,10 +128,11 @@ const RegistrationPage: React.FC = () => {
     try {
       // 准备数据
       const requestData = students.map((student) => ({
+        client_id: student.id,
         district_code: student.schoolArea,
         student_name: student.studentName,
         school: student.school,
-        teacher_name: student.guideTeacher || undefined,
+        teacher_name: student.guideTeacher,
         leader_name: student.teamTeacherName,
         leader_phone: student.teamTeacherPhone,
       }))
@@ -119,11 +156,12 @@ const RegistrationPage: React.FC = () => {
           .map((r) => ({
             id: 0,
             ticket_number: r.ticket_number!,
-            district_code: students.find((s) => s.studentName === r.student_name)?.schoolArea || '',
+            district_code: students.find((s) => s.id === r.client_id)?.schoolArea || selectedArea,
             student_name: r.student_name,
-            school: students.find((s) => s.studentName === r.student_name)?.school || '',
-            leader_name: students.find((s) => s.studentName === r.student_name)?.teamTeacherName || '',
-            leader_phone: students.find((s) => s.studentName === r.student_name)?.teamTeacherPhone || '',
+            school: students.find((s) => s.id === r.client_id)?.school || '',
+            teacher_name: students.find((s) => s.id === r.client_id)?.guideTeacher || '',
+            leader_name: students.find((s) => s.id === r.client_id)?.teamTeacherName || '',
+            leader_phone: students.find((s) => s.id === r.client_id)?.teamTeacherPhone || '',
             registration_time: new Date().toISOString(),
           }))
 
@@ -247,12 +285,13 @@ const RegistrationPage: React.FC = () => {
                           <select
                             value={student.schoolArea}
                             onChange={(e) => updateStudent(student.id, 'schoolArea', e.target.value)}
+                            disabled={index !== 0}
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                           >
                             <option value="">请选择</option>
                             {districts.map((district) => (
                               <option key={district.code} value={district.code}>
-                                {district.name} (剩余名额: {district.quota})
+                                {district.name} (剩余名额: {district.remaining_quota ?? district.quota} / 总名额: {district.quota})
                               </option>
                             ))}
                           </select>
@@ -289,14 +328,14 @@ const RegistrationPage: React.FC = () => {
                         {/* 指导教师 */}
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            指导教师
+                            指导教师 <span className="text-red-500">*</span>
                           </label>
                           <input
                             type="text"
                             value={student.guideTeacher}
                             onChange={(e) => updateStudent(student.id, 'guideTeacher', e.target.value)}
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                            placeholder="请输入指导教师姓名（选填）"
+                            placeholder="请输入指导教师姓名"
                           />
                         </div>
 

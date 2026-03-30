@@ -237,3 +237,4 @@ module.exports = async function handler(req, res) {
     return sendJson(res, 500, { success: false, message, error: detail })
   }
 }
+

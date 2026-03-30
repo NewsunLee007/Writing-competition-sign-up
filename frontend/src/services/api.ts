@@ -15,6 +15,8 @@ export interface District {
   code: string
   name: string
   quota: number
+  registered_count?: number
+  remaining_quota?: number
 }
 
 // 报名信息类型
@@ -50,6 +52,7 @@ export interface BatchRegistrationResponse {
   failed: number
   results: Array<{
     success: boolean
+    client_id?: string
     student_name: string
     ticket_number?: string
     reason?: string
