@@ -8,9 +8,35 @@ const QUOTA_OVERRIDES = {
   RZ: 6,
 };
 
+const EXAM_ROOM_MAP = {
+  TX: '01',
+  AY: '02',
+  FY: '03',
+  XC: '04',
+  MY: '05',
+  GL: '06',
+  HL: '07',
+  TS: '08',
+  SY: '09',
+  XY: '10',
+  AG: '11',
+  RX: '12',
+  JY: '13',
+  YM: '14',
+  GC: '15',
+  RZ: '16',
+  ZJ: '17',
+};
+
 const applyQuotaOverride = (code, quota) => {
   const override = QUOTA_OVERRIDES[String(code)];
   return typeof override === 'number' ? override : quota;
+};
+
+const createTicketNumber = (code, seatIndex) => {
+  const roomNo = EXAM_ROOM_MAP[String(code)] || '99';
+  const seatNo = String(seatIndex).padStart(2, '0');
+  return `26${roomNo}${seatNo}`;
 };
 
 // 获取所有学区信息
@@ -169,9 +195,7 @@ router.post('/registrations/batch', [
         continue;
       }
 
-      // 生成准考证号：20260412 + 学区代码 + 三位数序号
-      const sequence = (currentCounts[district_code] + 1).toString().padStart(3, '0');
-      const ticket_number = `20260412${district_code}${sequence}`;
+      const ticket_number = createTicketNumber(district_code, currentCounts[district_code] + 1);
 
       // 插入数据
       try {

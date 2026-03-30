@@ -1,206 +1,155 @@
+import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import { Registration } from '../services/api'
+import { getContestUnitName } from '../data/contestOptions'
 
-// 生成单个准考证PDF
-export const generateExamTicketPDF = (registration: Registration): void => {
-  // 创建PDF文档 (A4尺寸)
+const createTicketElement = (registration: Registration) => {
+  const wrapper = document.createElement('div')
+  wrapper.style.position = 'fixed'
+  wrapper.style.left = '-99999px'
+  wrapper.style.top = '0'
+  wrapper.style.width = '794px'
+  wrapper.style.padding = '32px'
+  wrapper.style.background = '#f5efe5'
+  wrapper.style.fontFamily = '"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif'
+  wrapper.style.zIndex = '0'
+
+  const districtName = registration.district_name || getContestUnitName(registration.district_code)
+
+  wrapper.innerHTML = `
+    <div style="min-height:1123px;border-radius:32px;overflow:hidden;background:linear-gradient(180deg,#10203c 0%,#173463 24%,#fdf9f2 24.2%,#fdf9f2 100%);box-shadow:0 40px 120px rgba(16,32,60,.18);">
+      <div style="padding:44px 48px 32px;color:#fff;">
+        <div style="font-size:13px;letter-spacing:.42em;text-transform:uppercase;opacity:.7;">Admit Pass</div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:24px;margin-top:16px;">
+          <div>
+            <div style="font-size:42px;font-weight:700;line-height:1.1;">瑞安市第三届初中学生</div>
+            <div style="font-size:42px;font-weight:700;line-height:1.1;">英语创意写作评审活动准考证</div>
+          </div>
+          <div style="padding:14px 18px;border-radius:18px;background:rgba(255,255,255,.12);backdrop-filter:blur(8px);text-align:right;">
+            <div style="font-size:12px;letter-spacing:.22em;text-transform:uppercase;opacity:.72;">Ticket No.</div>
+            <div style="margin-top:8px;font-size:24px;font-weight:700;">${registration.ticket_number}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding:34px 34px 42px;">
+        <div style="display:grid;grid-template-columns:1.1fr .9fr;gap:22px;">
+          <div style="border-radius:28px;background:#fff;border:1px solid #e8dece;padding:26px;">
+            <div style="font-size:14px;letter-spacing:.28em;text-transform:uppercase;color:#71819a;">Candidate</div>
+            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:22px;">
+              ${[
+                ['学生姓名', registration.student_name],
+                ['学校', registration.school],
+                ['报名归属', districtName],
+                ['指导教师', registration.teacher_name || '—'],
+                ['带队教师', registration.leader_name],
+                ['联系电话', registration.leader_phone],
+              ]
+                .map(
+                  ([label, value]) => `
+                    <div style="border-radius:20px;background:#f7f2ea;padding:16px 18px;border:1px solid #eee4d7;">
+                      <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#7c8798;">${label}</div>
+                      <div style="margin-top:10px;font-size:22px;font-weight:700;color:#111827;word-break:break-word;">${value}</div>
+                    </div>
+                  `
+                )
+                .join('')}
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:20px;">
+            <div style="border-radius:28px;background:#173463;color:#fff;padding:26px;">
+              <div style="font-size:14px;letter-spacing:.28em;text-transform:uppercase;opacity:.65;">Schedule</div>
+              <div style="margin-top:18px;font-size:22px;font-weight:700;">4 月 12 日（星期日）</div>
+              <div style="margin-top:18px;display:grid;gap:12px;font-size:18px;line-height:1.7;">
+                <div>8:50 报到</div>
+                <div>9:00 正式开始</div>
+                <div>9:40 活动结束</div>
+              </div>
+            </div>
+
+            <div style="border-radius:28px;background:#fff;border:1px solid #e8dece;padding:26px;">
+              <div style="font-size:14px;letter-spacing:.28em;text-transform:uppercase;color:#71819a;">Venue</div>
+              <div style="margin-top:18px;font-size:26px;font-weight:700;color:#111827;">瑞安市毓蒙中学</div>
+              <div style="margin-top:18px;font-size:16px;line-height:1.9;color:#4b5563;">
+                1. 请携带本准考证按时报到。<br/>
+                2. 现场作文，服从工作人员安排。<br/>
+                3. 如信息有误，请及时联系带队教师。
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:24px;border-radius:28px;background:#fff;border:1px solid #e8dece;padding:24px 28px;">
+          <div style="display:flex;justify-content:space-between;gap:24px;align-items:center;">
+            <div>
+              <div style="font-size:14px;letter-spacing:.28em;text-transform:uppercase;color:#71819a;">Notice</div>
+              <div style="margin-top:10px;font-size:18px;line-height:1.85;color:#334155;">
+                本准考证用于参加瑞安市第三届初中学生英语创意写作评审活动。请学校、学区或直属学校带队教师统一组织到场。
+              </div>
+            </div>
+            <div style="min-width:170px;padding:18px 20px;border-radius:22px;background:#f7f2ea;border:1px solid #eee4d7;">
+              <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#7c8798;">生成时间</div>
+              <div style="margin-top:10px;font-size:18px;font-weight:700;color:#111827;">${new Date().toLocaleString('zh-CN')}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `
+
+  document.body.appendChild(wrapper)
+  return wrapper
+}
+
+const appendTicketPage = async (doc: jsPDF, registration: Registration, withNewPage: boolean) => {
+  const element = createTicketElement(registration)
+
+  try {
+    const canvas = await html2canvas(element.firstElementChild as HTMLElement, {
+      backgroundColor: '#f5efe5',
+      scale: 2,
+      useCORS: true,
+    })
+
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    const imgData = canvas.toDataURL('image/png')
+
+    if (withNewPage) {
+      doc.addPage()
+    }
+
+    doc.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight)
+  } finally {
+    document.body.removeChild(element)
+  }
+}
+
+export const generateExamTicketPDF = async (registration: Registration) => {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
     format: 'a4',
   })
 
-  // 设置中文字体（使用默认字体，中文会显示为方块，建议使用自定义字体）
-  // 注意：完整的中文字体支持需要额外配置，这里使用基础实现
-
-  const pageWidth = doc.internal.pageSize.getWidth()
-  const pageHeight = doc.internal.pageSize.getHeight()
-  const margin = 20
-
-  // 添加标题
-  doc.setFontSize(24)
-  doc.setFont('helvetica', 'bold')
-  const title = 'Ruian English Writing Contest'
-  doc.text(title, pageWidth / 2, 30, { align: 'center' })
-
-  doc.setFontSize(18)
-  doc.text('Examination Ticket', pageWidth / 2, 42, { align: 'center' })
-
-  // 添加分隔线
-  doc.setLineWidth(0.5)
-  doc.line(margin, 50, pageWidth - margin, 50)
-
-  // 准考证信息
-  const startY = 65
-  const lineHeight = 12
-  let currentY = startY
-
-  // 信息框
-  doc.setDrawColor(200, 200, 200)
-  doc.setFillColor(249, 250, 251)
-  doc.roundedRect(margin, startY - 10, pageWidth - margin * 2, 120, 3, 3, 'FD')
-
-  // 设置字体
-  doc.setFontSize(12)
-  doc.setFont('helvetica', 'normal')
-
-  // 准考证号（重点突出）
-  doc.setFontSize(14)
-  doc.setFont('helvetica', 'bold')
-  doc.text('Ticket Number:', margin + 10, currentY)
-  doc.setFont('helvetica', 'normal')
-  doc.text(registration.ticket_number, margin + 50, currentY)
-  currentY += lineHeight * 1.5
-
-  // 学生信息
-  doc.setFontSize(12)
-  
-  // 学生姓名
-  doc.setFont('helvetica', 'bold')
-  doc.text('Student Name:', margin + 10, currentY)
-  doc.setFont('helvetica', 'normal')
-  // 中文名称使用拼音标注（因为默认字体不支持中文）
-  doc.text(registration.student_name, margin + 50, currentY)
-  currentY += lineHeight
-
-  // 学校
-  doc.setFont('helvetica', 'bold')
-  doc.text('School:', margin + 10, currentY)
-  doc.setFont('helvetica', 'normal')
-  doc.text(registration.school, margin + 50, currentY)
-  currentY += lineHeight
-
-  // 学区
-  const districtName = registration.district_name || getDistrictName(registration.district_code)
-  doc.setFont('helvetica', 'bold')
-  doc.text('District:', margin + 10, currentY)
-  doc.setFont('helvetica', 'normal')
-  doc.text(districtName, margin + 50, currentY)
-  currentY += lineHeight
-
-  // 带队教师
-  doc.setFont('helvetica', 'bold')
-  doc.text('Team Teacher:', margin + 10, currentY)
-  doc.setFont('helvetica', 'normal')
-  doc.text(`${registration.leader_name} (${registration.leader_phone})`, margin + 50, currentY)
-  currentY += lineHeight
-
-  // 指导教师（如果有）
-  if (registration.teacher_name) {
-    doc.setFont('helvetica', 'bold')
-    doc.text('Guide Teacher:', margin + 10, currentY)
-    doc.setFont('helvetica', 'normal')
-    doc.text(registration.teacher_name, margin + 50, currentY)
-    currentY += lineHeight
-  }
-
-  // 分隔线
-  currentY += 10
-  doc.setLineWidth(0.3)
-  doc.line(margin, currentY, pageWidth - margin, currentY)
-  currentY += 15
-
-  // 活动信息框
-  doc.setFillColor(239, 246, 255)
-  doc.roundedRect(margin, currentY - 5, pageWidth - margin * 2, 50, 3, 3, 'FD')
-
-  currentY += 5
-  doc.setFontSize(11)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(30, 64, 175)
-  doc.text('Event Information', pageWidth / 2, currentY, { align: 'center' })
-  currentY += 10
-
-  doc.setTextColor(0, 0, 0)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  doc.text('Date: April 12, 2026 (Sunday)', margin + 10, currentY)
-  currentY += 8
-  doc.text('Time: 8:50 AM Check-in, 9:00 AM Start', margin + 10, currentY)
-  currentY += 8
-  doc.text('Venue: Yumeng Middle School, Ruian City', margin + 10, currentY)
-  currentY += 15
-
-  // 注意事项
-  doc.setLineWidth(0.3)
-  doc.line(margin, currentY, pageWidth - margin, currentY)
-  currentY += 10
-
-  doc.setFontSize(11)
-  doc.setFont('helvetica', 'bold')
-  doc.text('Important Notes:', margin, currentY)
-  currentY += 8
-
-  doc.setFontSize(9)
-  doc.setFont('helvetica', 'normal')
-  const notes = [
-    '1. Please bring this ticket and ID card on the day of the contest.',
-    '2. Arrive at the venue 10 minutes before the start time.',
-    '3. Electronic devices are not allowed during the contest.',
-    '4. Contact your team teacher if you have any questions.',
-  ]
-
-  notes.forEach((note) => {
-    doc.text(note, margin, currentY)
-    currentY += 6
-  })
-
-  // 页脚
-  doc.setFontSize(8)
-  doc.setTextColor(128, 128, 128)
-  doc.text(
-    'Ruian English Writing Contest Organizing Committee',
-    pageWidth / 2,
-    pageHeight - 15,
-    { align: 'center' }
-  )
-  doc.text(
-    `Generated on: ${new Date().toLocaleString('en-US')}`,
-    pageWidth / 2,
-    pageHeight - 10,
-    { align: 'center' }
-  )
-
-  // 保存PDF
-  const fileName = `ExamTicket_${registration.ticket_number}.pdf`
-  doc.save(fileName)
+  await appendTicketPage(doc, registration, false)
+  doc.save(`准考证-${registration.student_name}-${registration.ticket_number}.pdf`)
 }
 
-// 批量生成准考证PDF
-export const generateBatchExamTicketsPDF = (registrations: Registration[]): void => {
-  registrations.forEach((registration, index) => {
-    // 为每个学生创建单独的PDF
-    generateExamTicketPDF(registration)
-    
-    // 如果不是最后一个，添加延迟避免浏览器阻止多次下载
-    if (index < registrations.length - 1) {
-      setTimeout(() => {
-        // 继续下一个
-      }, 500)
-    }
+export const generateBatchExamTicketsPDF = async (
+  registrations: Registration[],
+  fileBaseName = '批量准考证'
+) => {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
   })
-}
 
-// 获取学区名称
-const getDistrictName = (code: string): string => {
-  const districtNames: Record<string, string> = {
-    TX: 'Tangxia District',
-    AY: 'Anyang District',
-    FY: 'Feiyun District',
-    XC: 'Xincheng District',
-    MY: 'Mayu District',
-    GL: 'Gaolou District',
-    HL: 'Huling District',
-    TS: 'Taoshan District',
-    SY: 'Ruian Experimental Middle School',
-    XY: 'Anyang New Era',
-    AG: 'Angao',
-    RX: 'Ruixiang Experimental School',
-    JY: 'Jiyun Experimental School',
-    YM: 'Yumeng Middle School',
-    GC: 'Guangchang Middle School',
-    RZ: 'Ruizhong Fuchu',
-    ZJ: 'Zijing Academy',
+  for (const [index, registration] of registrations.entries()) {
+    await appendTicketPage(doc, registration, index > 0)
   }
-  return districtNames[code] || code
+
+  doc.save(`${fileBaseName}.pdf`)
 }

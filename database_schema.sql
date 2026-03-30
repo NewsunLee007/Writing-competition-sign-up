@@ -88,7 +88,7 @@ END $$;
 -- 2. 创建报名表
 CREATE TABLE IF NOT EXISTS registrations (
     id SERIAL PRIMARY KEY,
-    ticket_number VARCHAR(20) UNIQUE NOT NULL,  -- 准考证号: 20260412+学区代码+序号
+    ticket_number VARCHAR(20) UNIQUE NOT NULL,  -- 准考证号: 年份2位 + 考场号2位 + 座位号2位
     district_code VARCHAR(10) NOT NULL,         -- 学区代码
     student_name VARCHAR(50) NOT NULL,          -- 学生姓名
     school VARCHAR(100) NOT NULL,               -- 学校名称

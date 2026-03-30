@@ -4,6 +4,26 @@ const QUOTA_OVERRIDES = {
   RZ: 6,
 }
 
+const EXAM_ROOM_MAP = {
+  TX: '01',
+  AY: '02',
+  FY: '03',
+  XC: '04',
+  MY: '05',
+  GL: '06',
+  HL: '07',
+  TS: '08',
+  SY: '09',
+  XY: '10',
+  AG: '11',
+  RX: '12',
+  JY: '13',
+  YM: '14',
+  GC: '15',
+  RZ: '16',
+  ZJ: '17',
+}
+
 async function getSql() {
   if (sqlClient) return sqlClient
   const { neon } = await import('@neondatabase/serverless')
@@ -48,6 +68,12 @@ function setCors(res) {
 function applyQuotaOverride(code, quota) {
   const override = QUOTA_OVERRIDES[String(code)]
   return typeof override === 'number' ? override : quota
+}
+
+function createTicketNumber(code, seatIndex) {
+  const roomNo = EXAM_ROOM_MAP[String(code)] || '99'
+  const seatNo = String(seatIndex).padStart(2, '0')
+  return `26${roomNo}${seatNo}`
 }
 
 module.exports = async function handler(req, res) {
@@ -154,8 +180,7 @@ module.exports = async function handler(req, res) {
           continue
         }
 
-        const sequence = String(currentCount + 1).padStart(3, '0')
-        const ticket_number = `20260412${districtCode}${sequence}`
+        const ticket_number = createTicketNumber(districtCode, currentCount + 1)
 
         try {
           await sql`
