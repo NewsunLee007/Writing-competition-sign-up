@@ -249,7 +249,7 @@ export const securityCheck = async (req, res, next) => {
     ];
     
     for (const header of suspiciousHeaders) {
-      if (req.headers[header] && !req.headers[header].match(/^[\d\.:]+$/)) {
+      if (req.headers[header] && !req.headers[header].match(/^[\d.:]+$/)) {
         console.warn(`可疑请求头检测: ${header}=${req.headers[header]}`);
       }
     }

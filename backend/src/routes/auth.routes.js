@@ -2,7 +2,6 @@ import express from 'express';
 import { body, validationResult } from 'express-validator';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
-import database from '../config/database.js';
 
 const router = express.Router();
 

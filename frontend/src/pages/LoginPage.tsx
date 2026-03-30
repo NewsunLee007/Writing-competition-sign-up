@@ -47,7 +47,7 @@ const LoginPage: React.FC = () => {
     },
   })
 
-  const onSubmit = async (_data: LoginFormData) => {
+  const onSubmit = async () => {
     setIsLoading(true)
 
     try {

@@ -5,7 +5,6 @@ import { fileURLToPath } from 'url';
 import { body, validationResult } from 'express-validator';
 import { authenticateToken, authorizeRole, validateUpload } from '../middlewares/auth.js';
 import Registration from '../models/Registration.js';
-import User from '../models/User.js';
 
 const router = express.Router();
 

@@ -1,12 +1,13 @@
 // API基础URL配置
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:8000/api')
 
 // API响应类型
 interface ApiResponse<T> {
   success: boolean
   message?: string
   data?: T
-  errors?: any[]
+  errors?: unknown[]
 }
 
 // 学区信息类型
@@ -62,6 +63,8 @@ export interface SearchParams {
   school?: string
 }
 
+export type DistrictStatRow = Record<string, unknown>
+
 // API服务类
 class ApiService {
   private baseUrl: string
@@ -112,8 +115,8 @@ class ApiService {
   }
 
   // 获取学区报名统计
-  async getDistrictStats(): Promise<ApiResponse<any[]>> {
-    return this.request<any[]>('/contest/districts/stats')
+  async getDistrictStats(): Promise<ApiResponse<DistrictStatRow[]>> {
+    return this.request<DistrictStatRow[]>('/contest/districts/stats')
   }
 
   // 批量报名
@@ -161,8 +164,8 @@ class ApiService {
   }
 
   // 健康检查
-  async healthCheck(): Promise<ApiResponse<any>> {
-    return this.request<any>('/contest/health')
+  async healthCheck(): Promise<ApiResponse<Record<string, unknown>>> {
+    return this.request<Record<string, unknown>>('/contest/health')
   }
 }
 

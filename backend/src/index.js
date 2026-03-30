@@ -108,7 +108,7 @@ app.use('/api/*', (req, res) => {
 });
 
 // 错误处理中间件
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   console.error('服务器错误:', err);
 
   const status = err.status || 500;

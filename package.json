@@ -3,10 +3,19 @@
   "version": "1.0.0",
   "description": "瑞安市英语写作大赛报名网站",
   "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
-    "dev": "concurrently \"cd frontend && npm run dev\" \"cd backend && npm run dev\"",
-    "build": "cd frontend && npm install && npm run build",
-    "start": "cd backend && npm run start"
+    "dev": "concurrently \"npm -w frontend run dev\" \"npm -w backend run dev\"",
+    "build": "npm -w frontend run build",
+    "start": "npm -w backend run start",
+    "lint": "npm -w frontend run lint && npm -w backend run lint",
+    "typecheck": "npm -w frontend run typecheck"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.2"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
