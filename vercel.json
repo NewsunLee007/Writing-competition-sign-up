@@ -1,4 +1,9 @@
 {
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/dist",
+  "installCommand": "cd frontend && npm install",
+  "framework": null,
+  "regions": ["sin1"],
   "rewrites": [
     {
       "source": "/api/(.*)",
@@ -9,6 +14,5 @@
     "api/**/*.js": {
       "maxDuration": 10
     }
-  },
-  "regions": ["sin1"]
+  }
 }
