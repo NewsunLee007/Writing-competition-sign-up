@@ -39,6 +39,7 @@ const EXAM_ROOM_MAP = {
   RZ: '16',
   ZJ: '17',
 }
+const PHONE_REGEX = /^1[3-9]\d{9}$/
 
 async function getSql() {
   if (sqlClient) return sqlClient
@@ -93,6 +94,17 @@ function createTicketNumber(code, seatIndex) {
   const roomNo = EXAM_ROOM_MAP[String(code)] || '99'
   const seatNo = String(seatIndex).padStart(2, '0')
   return `26${roomNo}${seatNo}`
+}
+
+async function ensureRegistrationColumns(sql) {
+  await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS client_ip VARCHAR(64)`
+}
+
+function getClientIp(req) {
+  const header = req.headers['x-forwarded-for']
+  if (Array.isArray(header)) return String(header[0]).split(',')[0].trim()
+  if (header) return String(header).split(',')[0].trim()
+  return req.socket?.remoteAddress || ''
 }
 
 export default async function handler(req, res) {
@@ -150,8 +162,10 @@ export default async function handler(req, res) {
     }
 
     if (segments[0] === 'registrations' && segments[1] === 'batch' && req.method === 'POST') {
+      await ensureRegistrationColumns(sql)
       const body = await readJsonBody(req)
       const students = body?.students
+      const clientIp = getClientIp(req)
 
       if (!Array.isArray(students)) {
         return sendJson(res, 400, { success: false, message: 'students必须是数组' })
@@ -164,6 +178,9 @@ export default async function handler(req, res) {
         if (!student?.teacher_name) return sendJson(res, 400, { success: false, message: '指导教师不能为空' })
         if (!student?.leader_name) return sendJson(res, 400, { success: false, message: '带队教师姓名不能为空' })
         if (!student?.leader_phone) return sendJson(res, 400, { success: false, message: '带队教师电话不能为空' })
+        if (!PHONE_REGEX.test(String(student.leader_phone))) {
+          return sendJson(res, 400, { success: false, message: '带队教师电话必须为11位手机号' })
+        }
       }
 
       const districtCodes = Array.from(new Set(students.map((s) => String(s.district_code))))
@@ -203,7 +220,7 @@ export default async function handler(req, res) {
 
         try {
           await sql`
-            INSERT INTO registrations (ticket_number, district_code, student_name, school, teacher_name, leader_name, leader_phone)
+            INSERT INTO registrations (ticket_number, district_code, student_name, school, teacher_name, leader_name, leader_phone, client_ip)
             VALUES (
               ${ticket_number},
               ${districtCode},
@@ -211,7 +228,8 @@ export default async function handler(req, res) {
               ${student.school},
               ${student.teacher_name},
               ${student.leader_name},
-              ${student.leader_phone}
+              ${student.leader_phone},
+              ${clientIp}
             )
           `
 
@@ -261,6 +279,31 @@ export default async function handler(req, res) {
       if (schoolStr) filtered = filtered.filter((r) => r.school && String(r.school).includes(schoolStr))
 
       return sendJson(res, 200, { success: true, data: filtered.slice(0, 100) })
+    }
+
+    if (segments[0] === 'registrations' && segments[1] === 'recent' && req.method === 'GET') {
+      await ensureRegistrationColumns(sql)
+      const clientIp = getClientIp(req)
+      const districtCode = req.query?.district_code ? String(req.query.district_code) : ''
+      const school = req.query?.school ? String(req.query.school) : ''
+
+      let result = await sql`
+        SELECT r.*, d.name as district_name
+        FROM registrations r
+        LEFT JOIN districts d ON r.district_code = d.code
+        WHERE r.client_ip = ${clientIp}
+        ORDER BY r.registration_time DESC
+      `
+
+      if (districtCode || school) {
+        result = result.filter((row) => {
+          const matchDistrict = districtCode ? String(row.district_code) === districtCode : false
+          const matchSchool = school ? String(row.school) === school : false
+          return matchDistrict || matchSchool
+        })
+      }
+
+      return sendJson(res, 200, { success: true, data: result.slice(0, 100) })
     }
 
     if (segments[0] === 'registrations' && segments.length === 1 && req.method === 'GET') {

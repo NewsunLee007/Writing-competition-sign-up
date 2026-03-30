@@ -14,6 +14,7 @@ export interface ImportedStudent {
 }
 
 const REQUIRED_HEADERS = ['报名类别', '学区/直属学校', '学校', '学生姓名', '指导教师', '带队教师', '带队教师电话']
+const PHONE_REGEX = /^1\d{10}$/
 
 const normalizeText = (value: unknown) => String(value ?? '').trim()
 
@@ -79,6 +80,10 @@ export const parseBatchImportFile = async (file: File): Promise<ImportedStudent[
 
     if (!studentName || !guideTeacher || !teamTeacherName || !teamTeacherPhone) {
       throw new Error(`第 ${index + 2} 行存在必填项未填写`)
+    }
+
+    if (!PHONE_REGEX.test(teamTeacherPhone)) {
+      throw new Error(`第 ${index + 2} 行“带队教师电话”必须为 11 位手机号`)
     }
 
     const school =

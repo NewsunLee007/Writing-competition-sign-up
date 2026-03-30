@@ -43,6 +43,7 @@ const EXAM_ROOM_MAP = {
   RZ: '16',
   ZJ: '17',
 };
+const PHONE_REGEX = /^1[3-9]\d{9}$/;
 
 const applyQuotaOverride = (code, quota) => {
   return UNIT_META[String(code)]?.quota ?? quota;
@@ -56,6 +57,17 @@ const createTicketNumber = (code, seatIndex) => {
   const roomNo = EXAM_ROOM_MAP[String(code)] || '99';
   const seatNo = String(seatIndex).padStart(2, '0');
   return `26${roomNo}${seatNo}`;
+};
+
+const ensureRegistrationColumns = async () => {
+  await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS client_ip VARCHAR(64)`;
+};
+
+const getClientIp = (req) => {
+  const header = req.headers['x-forwarded-for'];
+  if (Array.isArray(header)) return String(header[0]).split(',')[0].trim();
+  if (header) return String(header).split(',')[0].trim();
+  return req.ip || req.socket?.remoteAddress || '';
 };
 
 // 获取所有学区信息
@@ -153,6 +165,7 @@ router.post('/registrations/batch', [
   body('students.*.leader_phone').notEmpty().withMessage('带队教师电话不能为空'),
 ], async (req, res) => {
   try {
+    await ensureRegistrationColumns();
     // 验证输入
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -163,6 +176,16 @@ router.post('/registrations/batch', [
     }
 
     const { students } = req.body;
+    const clientIp = getClientIp(req);
+
+    for (const student of students) {
+      if (!PHONE_REGEX.test(String(student.leader_phone))) {
+        return res.status(400).json({
+          success: false,
+          message: '带队教师电话必须为11位手机号',
+        });
+      }
+    }
 
     // 获取每个学区的当前报名数量
     const currentCounts = {};
@@ -218,8 +241,8 @@ router.post('/registrations/batch', [
 
       // 插入数据
       try {
-        await sql`INSERT INTO registrations (ticket_number, district_code, student_name, school, teacher_name, leader_name, leader_phone)
-           VALUES (${ticket_number}, ${district_code}, ${student_name}, ${school}, ${teacher_name}, ${leader_name}, ${leader_phone})`;
+        await sql`INSERT INTO registrations (ticket_number, district_code, student_name, school, teacher_name, leader_name, leader_phone, client_ip)
+           VALUES (${ticket_number}, ${district_code}, ${student_name}, ${school}, ${teacher_name}, ${leader_name}, ${leader_phone}, ${clientIp})`;
 
         batchResults.push({
           success: true,
@@ -264,6 +287,42 @@ router.post('/registrations/batch', [
     res.status(500).json({
       success: false,
       message: '批量报名失败',
+    });
+  }
+});
+
+router.get('/registrations/recent', async (req, res) => {
+  try {
+    await ensureRegistrationColumns();
+    const clientIp = getClientIp(req);
+    const districtCode = req.query?.district_code ? String(req.query.district_code) : '';
+    const school = req.query?.school ? String(req.query.school) : '';
+
+    let result = await sql`
+      SELECT r.*, d.name as district_name
+      FROM registrations r
+      LEFT JOIN districts d ON r.district_code = d.code
+      WHERE r.client_ip = ${clientIp}
+      ORDER BY r.registration_time DESC
+    `;
+
+    if (districtCode || school) {
+      result = result.filter((row) => {
+        const matchDistrict = districtCode ? String(row.district_code) === districtCode : false;
+        const matchSchool = school ? String(row.school) === school : false;
+        return matchDistrict || matchSchool;
+      });
+    }
+
+    res.json({
+      success: true,
+      data: result.slice(0, 100),
+    });
+  } catch (error) {
+    console.error('获取近期报名记录错误:', error);
+    res.status(500).json({
+      success: false,
+      message: '获取近期报名记录失败',
     });
   }
 });

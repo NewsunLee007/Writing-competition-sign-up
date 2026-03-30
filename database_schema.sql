@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS registrations (
     teacher_name VARCHAR(50),                   -- 指导教师
     leader_name VARCHAR(50) NOT NULL,           -- 带队教师姓名
     leader_phone VARCHAR(20) NOT NULL,          -- 带队教师联系号码
+    client_ip VARCHAR(64),                      -- 提交来源IP
     registration_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- 报名时间
     
     -- 外键关联
@@ -108,6 +109,7 @@ CREATE INDEX idx_registrations_district ON registrations(district_code);
 CREATE INDEX idx_registrations_ticket ON registrations(ticket_number);
 CREATE INDEX idx_registrations_student ON registrations(student_name);
 CREATE INDEX idx_registrations_school ON registrations(school);
+CREATE INDEX idx_registrations_client_ip ON registrations(client_ip);
 
 -- 4. 创建视图：统计各学区报名情况
 CREATE OR REPLACE VIEW district_stats AS

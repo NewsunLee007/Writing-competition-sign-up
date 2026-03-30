@@ -10,7 +10,6 @@ import {
   FileSpreadsheet,
   Landmark,
   Building2,
-  Sparkles,
   Users,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -47,6 +46,8 @@ interface StudentDraft {
 }
 
 type EntryMode = 'manual' | 'batch'
+const PHONE_REGEX = /^1[3-9]\d{9}$/
+const normalizePhone = (value: string) => value.replace(/\D/g, '').slice(0, 11)
 
 const createStudentDraft = (
   unitType: RegistrationUnitType = 'district',
@@ -57,7 +58,7 @@ const createStudentDraft = (
   unitCode,
   studentName: '',
   school: unitCode && isDirectSchoolCode(unitCode) ? getContestUnitName(unitCode) : '',
-  schoolSelection: unitCode && isDirectSchoolCode(unitCode) ? getContestUnitName(unitCode) : '',
+  schoolSelection: unitCode && isDirectSchoolCode(unitCode) ? getContestUnitName(unitCode) : CUSTOM_SCHOOL_OPTION,
   guideTeacher: '',
   teamTeacherName: '',
   teamTeacherPhone: '',
@@ -151,6 +152,9 @@ const RegistrationPage: React.FC = () => {
         if (field === 'school' && isDirectSchoolCode(student.unitCode)) {
           return student
         }
+        if (field === 'teamTeacherPhone') {
+          return { ...student, teamTeacherPhone: normalizePhone(value) }
+        }
         if (field === 'schoolSelection') {
           if (value === CUSTOM_SCHOOL_OPTION) {
             return { ...student, schoolSelection: value, school: '' }
@@ -188,6 +192,11 @@ const RegistrationPage: React.FC = () => {
         return false
       }
 
+      if (!PHONE_REGEX.test(draft.teamTeacherPhone)) {
+        toast.error('带队教师联系电话必须为 11 位中国大陆手机号')
+        return false
+      }
+
       grouped.set(draft.unitCode, (grouped.get(draft.unitCode) || 0) + 1)
     }
 
@@ -200,6 +209,26 @@ const RegistrationPage: React.FC = () => {
     }
 
     return true
+  }
+
+  const loadRecentSuccessfulTickets = async (drafts: StudentDraft[], fallbackTickets: Registration[]) => {
+    const firstDraft = drafts[0]
+    if (!firstDraft) {
+      setGeneratedTickets(fallbackTickets)
+      return
+    }
+
+    const recentResponse = await apiService.getRecentRegistrations({
+      district_code: firstDraft.unitCode,
+      school: firstDraft.school,
+    })
+
+    if (recentResponse.success && recentResponse.data && recentResponse.data.length > 0) {
+      setGeneratedTickets(recentResponse.data)
+      return
+    }
+
+    setGeneratedTickets(fallbackTickets)
   }
 
   const submitStudents = async (drafts: StudentDraft[]) => {
@@ -243,7 +272,7 @@ const RegistrationPage: React.FC = () => {
           }
         })
 
-      setGeneratedTickets(tickets)
+      await loadRecentSuccessfulTickets(drafts, tickets)
       setIsSuccess(true)
 
       toast.success(`成功报名 ${response.data.success} 人`)
@@ -326,10 +355,9 @@ const RegistrationPage: React.FC = () => {
           <div className="relative z-10">
             <div className="flex flex-col gap-4 border-b border-[#ded5c6] pb-8 md:flex-row md:items-center md:justify-between">
               <div>
-                <span className="eyebrow">Submission Completed</span>
                 <h1 className="mt-5 font-serif text-4xl text-ink sm:text-5xl">报名提交完成</h1>
                 <p className="mt-4 max-w-2xl text-secondary-700">
-                  已成功生成 {generatedTickets.length} 份准考证，你可以现在整组下载，或逐个核对后再下载。
+                  当前列表会保留同一网络下、同一报名归属或同一学校的近期报名记录，方便连续录入后统一下载。
                 </p>
               </div>
               <CheckCircle className="h-14 w-14 text-green-600" />
@@ -388,11 +416,9 @@ const RegistrationPage: React.FC = () => {
         <div className="panel-grid items-start">
           <section className="section-shell p-7 sm:p-10">
             <div className="relative z-10">
-              <span className="eyebrow">Registration Studio</span>
               <h1 className="mt-5 font-serif text-4xl text-ink sm:text-5xl">报名中心</h1>
               <p className="mt-4 max-w-3xl text-base leading-8 text-secondary-700">
-                采用更清晰的内部操作逻辑：将学区推荐与直属学校拆分为两条流程；支持手工录入、Excel
-                批量导入，以及后续准考证整组下载。
+                Register with clarity，按学区推荐或直属学校两条路径完成录入、导入与准考证下载。
               </p>
               <div className="mt-7 grid gap-3 sm:grid-cols-3">
                 {overviewStats.map((item) => (
@@ -407,37 +433,27 @@ const RegistrationPage: React.FC = () => {
             </div>
           </section>
 
-          <aside className="section-shell bg-[#10203c] p-7 text-white sm:p-8">
+          <aside className="section-shell p-6 sm:p-8">
             <div className="relative z-10 space-y-5">
               <div>
-                <span className="text-xs font-semibold uppercase tracking-[0.32em] text-white/45">
-                  Key Workflow
-                </span>
-                <h2 className="mt-3 font-serif text-4xl text-white">内部操作规范</h2>
+                <h2 className="font-serif text-3xl text-ink">填报说明</h2>
+                <p className="mt-3 text-sm leading-8 text-secondary-700">
+                  系统已按活动通知拆分学区与直属学校名额。建议先选择报名归属，再连续录入同一组学生。
+                </p>
               </div>
 
-              <div className="space-y-3 text-sm leading-7 text-white/72">
-                <p>1. 学区推荐与直属学校分流录入。</p>
-                <p>2. 每位学生必须单独填写指导教师。</p>
-                <p>3. 下载端支持个人、学校、学区三个层级导出。</p>
-                <p>4. 批量模板内置下拉项，统一导入口径。</p>
-              </div>
-
-              <div className="rounded-[24px] border border-white/10 bg-white/8 p-5">
-                <div className="flex items-center gap-2 text-[#f0c58a]">
-                  <Sparkles className="h-4 w-4" />
-                  <span className="text-sm font-semibold">模板选项预览</span>
-                </div>
+              <div className="rounded-[24px] border border-[#e5dccf] bg-[#fffaf2] p-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-secondary-500">模板选项预览</p>
                 <div className="mt-4 grid gap-3">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-white/40">学区</p>
-                    <p className="mt-2 text-sm leading-7 text-white/75">
+                    <p className="text-sm font-semibold text-ink">学区</p>
+                    <p className="mt-2 text-sm leading-7 text-secondary-600">
                       {templatePreview.districtOptions.join(' · ')}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-[0.22em] text-white/40">直属学校</p>
-                    <p className="mt-2 text-sm leading-7 text-white/75">
+                    <p className="text-sm font-semibold text-ink">直属学校</p>
+                    <p className="mt-2 text-sm leading-7 text-secondary-600">
                       {templatePreview.directSchoolOptions.join(' · ')}
                     </p>
                   </div>
@@ -681,8 +697,13 @@ const RegistrationPage: React.FC = () => {
                                 className="form-input"
                                 value={student.teamTeacherPhone}
                                 onChange={(event) => updateManualStudent(student.id, 'teamTeacherPhone', event.target.value)}
-                                placeholder="请输入手机号或办公电话"
+                                placeholder="请输入 11 位中国大陆手机号"
+                                inputMode="numeric"
+                                maxLength={11}
                               />
+                              <p className="mt-2 text-xs leading-6 text-secondary-500">
+                                仅支持数字输入，长度需为 11 位手机号码。
+                              </p>
                             </div>
                           </div>
                         </div>
@@ -824,7 +845,7 @@ const RegistrationPage: React.FC = () => {
 
               <div className="rounded-[24px] border border-[#e5dccf] bg-white/82 p-5">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-bronze" />
+                  <Users className="h-4 w-4 text-bronze" />
                   <p className="text-sm font-semibold text-ink">当前名额概览</p>
                 </div>
                 <div className="mt-4 grid gap-3">

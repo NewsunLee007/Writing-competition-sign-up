@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Menu, X, Home, ClipboardList, Download, Sparkles } from 'lucide-react'
+import { Menu, X, Home, ClipboardList, Download } from 'lucide-react'
 
 const Layout: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -30,7 +30,7 @@ const Layout: React.FC = () => {
               <Link to="/" className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-primary-900 shadow-[0_14px_40px_rgba(22,38,79,0.28)]">
                   <img
-                    src="https://p.ipic.vip/c9knc6.png"
+                    src="/contest-logo.png"
                     alt="瑞安市英语写作大赛"
                     className="h-full w-full object-cover"
                   />
@@ -57,13 +57,6 @@ const Layout: React.FC = () => {
                   <span>{item.label}</span>
                 </Link>
               ))}
-            </div>
-
-            <div className="hidden xl:flex">
-              <div className="stat-chip gap-2">
-                <Sparkles className="h-3.5 w-3.5 text-bronze" />
-                适配横屏 / 竖屏 / 批量管理
-              </div>
             </div>
           </div>
 
@@ -98,24 +91,10 @@ const Layout: React.FC = () => {
 
       <footer className="mt-16 border-t border-white/40 bg-[#10203c] text-white">
         <div className="container-responsive py-10">
-          <div className="orientation-stack items-start justify-between">
-            <div className="space-y-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.35em] text-white/50">
-                Organized Editorially
-              </div>
-              <h3 className="font-serif text-3xl text-white">
-                英语创意写作评审活动报名系统
-              </h3>
-              <p className="max-w-2xl text-sm leading-7 text-white/70">
-                为学校、学区与直属学校提供统一的报名、批量导入、准考证生成与下载能力。
-              </p>
-            </div>
-
-            <div className="grid gap-3 text-sm text-white/70">
-              <p>承办单位：瑞安市毓蒙中学</p>
-              <p>联系邮箱：26392666@qq.com</p>
-              <p>© {new Date().getFullYear()} 瑞安市教育发展研究院</p>
-            </div>
+          <div className="flex flex-col gap-3 text-sm leading-7 text-white/72 sm:flex-row sm:items-center sm:justify-between">
+            <p>承办单位：瑞安市毓蒙中学</p>
+            <p>联系邮箱：26392666@qq.com</p>
+            <p>© {new Date().getFullYear()} 瑞安市教育发展研究院</p>
           </div>
         </div>
       </footer>

@@ -31,6 +31,7 @@ export interface Registration {
   leader_name: string
   leader_phone: string
   registration_time: string
+  client_ip?: string
 }
 
 // 批量报名请求类型
@@ -157,6 +158,13 @@ class ApiService {
   // 获取所有报名信息
   async getAllRegistrations(): Promise<ApiResponse<Registration[]>> {
     return this.request<Registration[]>('/contest/registrations')
+  }
+
+  async getRecentRegistrations(params: { district_code?: string; school?: string }): Promise<ApiResponse<Registration[]>> {
+    const queryParams = new URLSearchParams()
+    if (params.district_code) queryParams.append('district_code', params.district_code)
+    if (params.school) queryParams.append('school', params.school)
+    return this.request<Registration[]>(`/contest/registrations/recent?${queryParams.toString()}`)
   }
 
   // 删除报名
