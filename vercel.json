@@ -1,31 +1,23 @@
 {
-  "version": 2,
-  "name": "ruian-writing-contest",
-  "builds": [
-    {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    },
-    {
-      "src": "backend/src/index.js",
-      "use": "@vercel/node"
-    }
-  ],
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/dist",
+  "installCommand": "npm install",
+  "framework": null,
+  "regions": ["sin1"],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/backend/src/index.js"
+      "dest": "/api/index.js"
     },
     {
       "src": "/(.*)",
-      "dest": "/frontend/$1"
+      "dest": "/frontend/dist/$1"
     }
   ],
-  "env": {
-    "NODE_ENV": "production"
-  },
-  "regions": ["sin1"]
+  "functions": {
+    "api/**/*.js": {
+      "maxDuration": 10,
+      "memory": 1024
+    }
+  }
 }
