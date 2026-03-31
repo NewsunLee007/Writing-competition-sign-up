@@ -34,6 +34,42 @@ export interface Registration {
   client_ip?: string
 }
 
+export interface AdminLoginResponse {
+  token: string
+  account: string
+  full_name: string
+}
+
+export interface AdminUnitProgress {
+  code: string
+  name: string
+  quota: number
+  registered_count: number
+  remaining_quota: number
+  school_count: number
+}
+
+export interface AdminSchoolProgress {
+  district_code: string
+  district_name: string
+  school: string
+  registered_count: number
+}
+
+export interface AdminProgress {
+  summary: {
+    total_registrations: number
+    registered_units: number
+    registered_schools: number
+  }
+  units: AdminUnitProgress[]
+  schools: AdminSchoolProgress[]
+}
+
+export interface AdminResetResponse {
+  cleared: number
+}
+
 // 批量报名请求类型
 export interface BatchRegistrationRequest {
   students: Array<{
@@ -158,6 +194,50 @@ class ApiService {
   // 获取所有报名信息
   async getAllRegistrations(): Promise<ApiResponse<Registration[]>> {
     return this.request<Registration[]>('/contest/registrations')
+  }
+
+  async adminLogin(account: string, password: string): Promise<ApiResponse<AdminLoginResponse>> {
+    return this.request<AdminLoginResponse>('/contest/admin/login', {
+      method: 'POST',
+      body: JSON.stringify({ account, password }),
+    })
+  }
+
+  async getAdminProgress(token: string): Promise<ApiResponse<AdminProgress>> {
+    return this.request<AdminProgress>('/contest/admin/progress', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+  }
+
+  async getAdminRegistrations(
+    token: string,
+    params?: { district_code?: string; school?: string }
+  ): Promise<ApiResponse<Registration[]>> {
+    const queryParams = new URLSearchParams()
+    if (params?.district_code) queryParams.append('district_code', params.district_code)
+    if (params?.school) queryParams.append('school', params.school)
+    const query = queryParams.toString()
+
+    return this.request<Registration[]>(`/contest/admin/registrations${query ? `?${query}` : ''}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+  }
+
+  async resetAdminRegistrations(
+    token: string,
+    confirmText: string
+  ): Promise<ApiResponse<AdminResetResponse>> {
+    return this.request<AdminResetResponse>('/contest/admin/registrations/reset', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ confirm_text: confirmText }),
+    })
   }
 
   async getRecentRegistrations(params: { district_code?: string; school?: string }): Promise<ApiResponse<Registration[]>> {

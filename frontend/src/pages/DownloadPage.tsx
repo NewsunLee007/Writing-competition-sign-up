@@ -1,49 +1,151 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Search, Download, AlertCircle, Loader, Users, Building2, Landmark } from 'lucide-react'
+import { Search, Download, AlertCircle, Loader, Users, Building2, Landmark, ShieldCheck, LogOut, FileSpreadsheet, BarChart3, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { apiService, Registration } from '../services/api'
+import * as XLSX from 'xlsx'
+import { apiService, AdminProgress, Registration } from '../services/api'
 import { generateBatchExamTicketsPDF, generateExamTicketPDF } from '../utils/pdfGenerator'
 import { CONTEST_UNITS, RegistrationUnitType, getContestUnitName } from '../data/contestOptions'
+
+const ADMIN_TOKEN_KEY = 'contest_admin_token'
+const ADMIN_RESET_CONFIRM_TEXT = '确认清空报名数据'
 
 const DownloadPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [searchResults, setSearchResults] = useState<Registration[]>([])
-  const [allRegistrations, setAllRegistrations] = useState<Registration[]>([])
   const [isSearching, setIsSearching] = useState(false)
-  const [isLoadingAll, setIsLoadingAll] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
-  const [downloadMode, setDownloadMode] = useState<'single' | 'batch'>('single')
-  const [batchUnitType, setBatchUnitType] = useState<RegistrationUnitType>('district')
-  const [batchUnitCode, setBatchUnitCode] = useState('')
-  const [schoolFilter, setSchoolFilter] = useState('')
+  const [downloadMode, setDownloadMode] = useState<'single' | 'admin'>('single')
+  const [adminAccount, setAdminAccount] = useState('admin')
+  const [adminPassword, setAdminPassword] = useState('admin123')
+  const [adminToken, setAdminToken] = useState('')
+  const [adminProgress, setAdminProgress] = useState<AdminProgress | null>(null)
+  const [adminRegistrations, setAdminRegistrations] = useState<Registration[]>([])
+  const [isAdminLoading, setIsAdminLoading] = useState(false)
+  const [adminUnitType, setAdminUnitType] = useState<RegistrationUnitType>('district')
+  const [adminUnitCode, setAdminUnitCode] = useState('')
+  const [adminSchoolFilter, setAdminSchoolFilter] = useState('')
+  const [showResetPanel, setShowResetPanel] = useState(false)
+  const [resetConfirmText, setResetConfirmText] = useState('')
+  const [isResetting, setIsResetting] = useState(false)
 
   useEffect(() => {
-    const loadAllRegistrations = async () => {
-      setIsLoadingAll(true)
-      const response = await apiService.getAllRegistrations()
-      if (response.success && response.data) {
-        setAllRegistrations(response.data)
+    const savedToken = window.localStorage.getItem(ADMIN_TOKEN_KEY)
+    if (!savedToken) return
+
+    const restoreAdminSession = async () => {
+      const success = await loadAdminCenter(savedToken)
+      if (!success) {
+        window.localStorage.removeItem(ADMIN_TOKEN_KEY)
       }
-      setIsLoadingAll(false)
     }
 
-    void loadAllRegistrations()
+    void restoreAdminSession()
   }, [])
 
-  const batchOptions = useMemo(
-    () => CONTEST_UNITS.filter((unit) => unit.type === batchUnitType),
-    [batchUnitType]
+  const adminOptions = useMemo(
+    () => CONTEST_UNITS.filter((unit) => unit.type === adminUnitType),
+    [adminUnitType]
   )
 
-  const filteredBatchResults = useMemo(() => {
-    return allRegistrations.filter((registration) => {
-      const matchesUnit = batchUnitCode ? registration.district_code === batchUnitCode : true
-      const matchesSchool = schoolFilter.trim()
-        ? registration.school.toLowerCase().includes(schoolFilter.trim().toLowerCase())
+  const filteredAdminRegistrations = useMemo(() => {
+    const allowedCodes = new Set(adminOptions.map((unit) => unit.code))
+    return adminRegistrations.filter((registration) => {
+      if (!allowedCodes.has(registration.district_code)) return false
+      const matchesUnit = adminUnitCode ? registration.district_code === adminUnitCode : true
+      const matchesSchool = adminSchoolFilter.trim()
+        ? registration.school.toLowerCase().includes(adminSchoolFilter.trim().toLowerCase())
         : true
       return matchesUnit && matchesSchool
     })
-  }, [allRegistrations, batchUnitCode, schoolFilter])
+  }, [adminOptions, adminRegistrations, adminSchoolFilter, adminUnitCode])
+
+  const filteredSchoolProgress = useMemo(() => {
+    const allowedCodes = new Set(adminOptions.map((unit) => unit.code))
+    return (adminProgress?.schools || []).filter((item) => {
+      if (!allowedCodes.has(item.district_code)) return false
+      const matchesUnit = adminUnitCode ? item.district_code === adminUnitCode : true
+      const matchesSchool = adminSchoolFilter.trim()
+        ? item.school.toLowerCase().includes(adminSchoolFilter.trim().toLowerCase())
+        : true
+      return matchesUnit && matchesSchool
+    })
+  }, [adminOptions, adminProgress?.schools, adminSchoolFilter, adminUnitCode])
+
+  const filteredUnitProgress = useMemo(() => {
+    const allowedCodes = new Set(CONTEST_UNITS.filter((unit) => unit.type === adminUnitType).map((unit) => unit.code))
+    return (adminProgress?.units || []).filter((item) => {
+      if (!allowedCodes.has(item.code)) return false
+      if (!adminUnitCode) return true
+      return item.code === adminUnitCode
+    })
+  }, [adminProgress?.units, adminUnitCode, adminUnitType])
+
+  const loadAdminCenter = async (token: string) => {
+    setIsAdminLoading(true)
+    try {
+      const [progressResponse, registrationsResponse] = await Promise.all([
+        apiService.getAdminProgress(token),
+        apiService.getAdminRegistrations(token),
+      ])
+
+      if (!progressResponse.success || !progressResponse.data) {
+        toast.error(progressResponse.message || '管理员身份已失效，请重新登录')
+        setAdminToken('')
+        setAdminProgress(null)
+        setAdminRegistrations([])
+        return false
+      }
+
+      if (!registrationsResponse.success || !registrationsResponse.data) {
+        toast.error(registrationsResponse.message || '报名数据加载失败')
+        return false
+      }
+
+      setAdminToken(token)
+      setAdminProgress(progressResponse.data)
+      setAdminRegistrations(registrationsResponse.data)
+      return true
+    } finally {
+      setIsAdminLoading(false)
+    }
+  }
+
+  const handleAdminLogin = async () => {
+    if (!adminAccount.trim() || !adminPassword.trim()) {
+      toast.error('请输入管理员账号和密码')
+      return
+    }
+
+    setIsAdminLoading(true)
+    try {
+      const response = await apiService.adminLogin(adminAccount.trim(), adminPassword)
+      if (!response.success || !response.data) {
+        toast.error(response.message || '管理员登录失败')
+        return
+      }
+
+      window.localStorage.setItem(ADMIN_TOKEN_KEY, response.data.token)
+      const loaded = await loadAdminCenter(response.data.token)
+      if (loaded) {
+        toast.success('管理员中心已打开')
+      }
+    } finally {
+      setIsAdminLoading(false)
+    }
+  }
+
+  const handleAdminLogout = () => {
+    window.localStorage.removeItem(ADMIN_TOKEN_KEY)
+    setAdminToken('')
+    setAdminProgress(null)
+    setAdminRegistrations([])
+    setAdminUnitType('district')
+    setAdminUnitCode('')
+    setAdminSchoolFilter('')
+    setShowResetPanel(false)
+    setResetConfirmText('')
+    toast.success('已退出管理员中心')
+  }
 
   const handleSearch = async () => {
     if (!searchTerm.trim()) {
@@ -91,23 +193,88 @@ const DownloadPage: React.FC = () => {
     }
   }
 
-  const handleBatchDownload = async () => {
-    if (!filteredBatchResults.length) {
+  const handleAdminTicketDownload = async () => {
+    if (!filteredAdminRegistrations.length) {
       toast.error('当前筛选结果为空')
       return
     }
 
     try {
-      const label = batchUnitCode
-        ? `${getContestUnitName(batchUnitCode)}准考证`
-        : schoolFilter
-        ? `${schoolFilter}-学校筛选准考证`
-        : '全部准考证'
+      const label = adminUnitCode
+        ? `${getContestUnitName(adminUnitCode)}准考证`
+        : adminSchoolFilter
+        ? `${adminSchoolFilter}-学校筛选准考证`
+        : '管理员批量准考证'
 
-      await generateBatchExamTicketsPDF(filteredBatchResults, label)
-      toast.success(`已生成 ${filteredBatchResults.length} 份准考证`)
+      await generateBatchExamTicketsPDF(filteredAdminRegistrations, label)
+      toast.success(`已生成 ${filteredAdminRegistrations.length} 份准考证`)
     } catch (_error) {
       toast.error('批量下载失败，请重试')
+    }
+  }
+
+  const exportAdminExcel = (rows: Registration[], fileName: string) => {
+    if (!rows.length) {
+      toast.error('当前没有可导出的报名数据')
+      return
+    }
+
+    const sheetData = rows.map((item) => ({
+      准考证号: item.ticket_number,
+      学生姓名: item.student_name,
+      学校: item.school,
+      报名归属: getContestUnitName(item.district_code),
+      指导教师: item.teacher_name || '',
+      带队教师: item.leader_name,
+      带队教师电话: item.leader_phone,
+      报名时间: item.registration_time,
+    }))
+
+    const workbook = XLSX.utils.book_new()
+    const worksheet = XLSX.utils.json_to_sheet(sheetData)
+    const columnWidths = [
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 20 },
+      { wch: 16 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 16 },
+      { wch: 22 },
+    ]
+    worksheet['!cols'] = columnWidths
+    XLSX.utils.book_append_sheet(workbook, worksheet, '报名信息')
+    XLSX.writeFile(workbook, `${fileName}.xlsx`)
+    toast.success(`已导出 ${rows.length} 条报名记录`)
+  }
+
+  const handleAdminReset = async () => {
+    if (!adminToken) {
+      toast.error('请先登录管理员账户')
+      return
+    }
+
+    if (resetConfirmText.trim() !== ADMIN_RESET_CONFIRM_TEXT) {
+      toast.error(`请输入“${ADMIN_RESET_CONFIRM_TEXT}”后再执行`)
+      return
+    }
+
+    setIsResetting(true)
+    try {
+      const response = await apiService.resetAdminRegistrations(adminToken, resetConfirmText.trim())
+      if (!response.success) {
+        toast.error(response.message || '清空报名数据失败')
+        return
+      }
+
+      await loadAdminCenter(adminToken)
+      setShowResetPanel(false)
+      setResetConfirmText('')
+      setAdminUnitCode('')
+      setAdminSchoolFilter('')
+      toast.success(response.message || '报名数据已清空')
+    } finally {
+      setIsResetting(false)
     }
   }
 
@@ -117,25 +284,29 @@ const DownloadPage: React.FC = () => {
         <section className="section-shell p-7 sm:p-10">
           <div className="relative z-10 panel-grid items-start">
             <div>
-              <span className="eyebrow">Ticket Center</span>
-              <h1 className="mt-5 font-serif text-4xl text-ink sm:text-5xl">准考证与下载中心</h1>
+              <span className="eyebrow">Ticket & Admin Center</span>
+              <h1 className="mt-5 font-serif text-4xl text-ink sm:text-5xl">准考证与管理员中心</h1>
               <p className="mt-4 max-w-3xl text-base leading-8 text-secondary-700">
-                既支持按准考证号、姓名、学校检索单个学生，也支持按学区或学校批量打包下载。
+                普通使用支持按准考证号、姓名、学校检索单个学生；管理员可统一查看报名进度并导出准考证与 Excel 数据。
               </p>
             </div>
 
             <div className="rounded-[24px] border border-white/60 bg-[#10203c] p-6 text-white">
               <div className="text-xs font-semibold uppercase tracking-[0.24em] text-white/40">
-                Download Scope
+                Admin Snapshot
               </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 <div className="rounded-[20px] border border-white/10 bg-white/8 p-4">
-                  <div className="text-sm text-white/60">已加载报名记录</div>
-                  <div className="mt-2 text-3xl font-semibold">{allRegistrations.length}</div>
+                  <div className="text-sm text-white/60">已报名学生</div>
+                  <div className="mt-2 text-3xl font-semibold">{adminProgress?.summary.total_registrations || 0}</div>
                 </div>
                 <div className="rounded-[20px] border border-white/10 bg-white/8 p-4">
-                  <div className="text-sm text-white/60">当前批量结果</div>
-                  <div className="mt-2 text-3xl font-semibold">{filteredBatchResults.length}</div>
+                  <div className="text-sm text-white/60">已有报名单位</div>
+                  <div className="mt-2 text-3xl font-semibold">{adminProgress?.summary.registered_units || 0}</div>
+                </div>
+                <div className="rounded-[20px] border border-white/10 bg-white/8 p-4">
+                  <div className="text-sm text-white/60">已有报名学校</div>
+                  <div className="mt-2 text-3xl font-semibold">{adminProgress?.summary.registered_schools || 0}</div>
                 </div>
               </div>
             </div>
@@ -152,10 +323,10 @@ const DownloadPage: React.FC = () => {
                 单条查询
               </button>
               <button
-                onClick={() => setDownloadMode('batch')}
-                className={`rounded-full px-4 py-2 text-sm font-semibold ${downloadMode === 'batch' ? 'bg-primary-900 text-white' : 'text-secondary-600'}`}
+                onClick={() => setDownloadMode('admin')}
+                className={`rounded-full px-4 py-2 text-sm font-semibold ${downloadMode === 'admin' ? 'bg-primary-900 text-white' : 'text-secondary-600'}`}
               >
-                批量下载
+                管理员中心
               </button>
             </div>
 
@@ -214,96 +385,287 @@ const DownloadPage: React.FC = () => {
               </div>
             ) : (
               <div className="mt-6 space-y-5">
-                <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
-                  <div className="rounded-[24px] border border-white/60 bg-white/78 p-5">
-                    <div className="flex items-center gap-2 text-ink">
-                      {batchUnitType === 'district' ? <Landmark className="h-5 w-5 text-primary-700" /> : <Building2 className="h-5 w-5 text-primary-700" />}
-                      <h3 className="text-xl font-semibold">下载范围</h3>
-                    </div>
-                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                      <button
-                        onClick={() => {
-                          setBatchUnitType('district')
-                          setBatchUnitCode('')
-                        }}
-                        className={`rounded-[22px] border p-4 text-left ${batchUnitType === 'district' ? 'border-primary-400 bg-primary-50' : 'border-[#ddd4c7] bg-[#fffaf3]'}`}
-                      >
-                        <div className="font-semibold text-ink">按学区下载</div>
-                        <div className="mt-2 text-sm text-secondary-600">适用于学区统一导出整组准考证</div>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setBatchUnitType('direct_school')
-                          setBatchUnitCode('')
-                        }}
-                        className={`rounded-[22px] border p-4 text-left ${batchUnitType === 'direct_school' ? 'border-primary-400 bg-primary-50' : 'border-[#ddd4c7] bg-[#fffaf3]'}`}
-                      >
-                        <div className="font-semibold text-ink">按直属学校下载</div>
-                        <div className="mt-2 text-sm text-secondary-600">适用于单所直属学校整体导出</div>
-                      </button>
-                    </div>
-
-                    <select value={batchUnitCode} onChange={(event) => setBatchUnitCode(event.target.value)} className="form-input mt-5">
-                      <option value="">全部{batchUnitType === 'district' ? '学区' : '直属学校'}</option>
-                      {batchOptions.map((unit) => (
-                        <option key={unit.code} value={unit.code}>
-                          {unit.name}
-                        </option>
-                      ))}
-                    </select>
-
-                    <input
-                      value={schoolFilter}
-                      onChange={(event) => setSchoolFilter(event.target.value)}
-                      className="form-input mt-4"
-                      placeholder="按学校名称进一步筛选"
-                    />
-
-                    <button onClick={() => void handleBatchDownload()} className="btn-primary mt-5 w-full justify-center">
-                      <Users className="h-4 w-4" />
-                      下载当前筛选结果
-                    </button>
-                  </div>
-
-                  <div className="rounded-[24px] border border-white/60 bg-white/78 p-5">
-                    <div className="flex items-center justify-between gap-3">
+                {!adminToken ? (
+                  <div className="mx-auto max-w-2xl rounded-[28px] border border-white/60 bg-white/78 p-6 sm:p-8">
+                    <div className="flex items-center gap-3">
+                      <ShieldCheck className="h-6 w-6 text-primary-700" />
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-secondary-500">Preview</p>
-                        <h3 className="mt-2 text-xl font-semibold text-ink">批量下载预览</h3>
+                        <h3 className="text-2xl font-semibold text-ink">管理员登录</h3>
+                        <p className="mt-1 text-sm leading-7 text-secondary-600">
+                          登录后可查看学区和学校报名进度，并统一导出准考证与 Excel 报名数据。
+                        </p>
                       </div>
-                      {isLoadingAll && <Loader className="h-5 w-5 animate-spin text-primary-700" />}
                     </div>
 
-                    <div className="mt-5 table-container">
-                      <table className="table">
-                        <thead className="table-head">
-                          <tr>
-                            <th className="table-header">学生姓名</th>
-                            <th className="table-header">学校</th>
-                            <th className="table-header">归属</th>
-                            <th className="table-header">准考证号</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#ece4d7]">
-                          {filteredBatchResults.slice(0, 10).map((registration) => (
-                            <tr key={registration.ticket_number}>
-                              <td className="table-cell">{registration.student_name}</td>
-                              <td className="table-cell">{registration.school}</td>
-                              <td className="table-cell">{getContestUnitName(registration.district_code)}</td>
-                              <td className="table-cell">{registration.ticket_number}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className="form-label">管理员账号</label>
+                        <input className="form-input" value={adminAccount} onChange={(event) => setAdminAccount(event.target.value)} />
+                      </div>
+                      <div>
+                        <label className="form-label">密码</label>
+                        <input
+                          type="password"
+                          className="form-input"
+                          value={adminPassword}
+                          onChange={(event) => setAdminPassword(event.target.value)}
+                          onKeyDown={(event) => event.key === 'Enter' && void handleAdminLogin()}
+                        />
+                      </div>
                     </div>
 
-                    {filteredBatchResults.length > 10 && (
-                      <p className="mt-3 text-sm text-secondary-500">
-                        当前仅展示前 10 条，实际将下载全部 {filteredBatchResults.length} 份准考证。
-                      </p>
-                    )}
+                    <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-sm text-secondary-500">默认管理员账号：admin，默认密码：admin123</p>
+                      <button onClick={() => void handleAdminLogin()} disabled={isAdminLoading} className="btn-primary">
+                        {isAdminLoading ? <Loader className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                        进入管理员中心
+                      </button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <>
+                    <div className="grid gap-4 lg:grid-cols-[0.88fr_1.12fr]">
+                      <div className="rounded-[24px] border border-white/60 bg-white/78 p-5">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 text-ink">
+                            <ShieldCheck className="h-5 w-5 text-primary-700" />
+                            <h3 className="text-xl font-semibold">管理员工具</h3>
+                          </div>
+                          <button onClick={handleAdminLogout} className="inline-flex items-center gap-2 text-sm font-semibold text-secondary-600">
+                            <LogOut className="h-4 w-4" />
+                            退出
+                          </button>
+                        </div>
+
+                        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                          <button
+                            onClick={() => {
+                              setAdminUnitType('district')
+                              setAdminUnitCode('')
+                            }}
+                            className={`rounded-[22px] border p-4 text-left ${adminUnitType === 'district' ? 'border-primary-400 bg-primary-50' : 'border-[#ddd4c7] bg-[#fffaf3]'}`}
+                          >
+                            <div className="flex items-center gap-2 font-semibold text-ink">
+                              <Landmark className="h-4 w-4 text-primary-700" />
+                              按学区查看
+                            </div>
+                            <div className="mt-2 text-sm text-secondary-600">查看各学区进度并导出对应报名数据</div>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setAdminUnitType('direct_school')
+                              setAdminUnitCode('')
+                            }}
+                            className={`rounded-[22px] border p-4 text-left ${adminUnitType === 'direct_school' ? 'border-primary-400 bg-primary-50' : 'border-[#ddd4c7] bg-[#fffaf3]'}`}
+                          >
+                            <div className="flex items-center gap-2 font-semibold text-ink">
+                              <Building2 className="h-4 w-4 text-primary-700" />
+                              按直属学校查看
+                            </div>
+                            <div className="mt-2 text-sm text-secondary-600">聚焦直属学校报名与导出需求</div>
+                          </button>
+                        </div>
+
+                        <select value={adminUnitCode} onChange={(event) => setAdminUnitCode(event.target.value)} className="form-input mt-5">
+                          <option value="">全部{adminUnitType === 'district' ? '学区' : '直属学校'}</option>
+                          {adminOptions.map((unit) => (
+                            <option key={unit.code} value={unit.code}>
+                              {unit.name}
+                            </option>
+                          ))}
+                        </select>
+
+                        <input
+                          value={adminSchoolFilter}
+                          onChange={(event) => setAdminSchoolFilter(event.target.value)}
+                          className="form-input mt-4"
+                          placeholder="按学校名称进一步筛选"
+                        />
+
+                        <div className="mt-5 grid gap-3">
+                          <button onClick={() => void handleAdminTicketDownload()} className="btn-primary w-full justify-center">
+                            <Users className="h-4 w-4" />
+                            下载当前筛选准考证
+                          </button>
+                          <button
+                            onClick={() =>
+                              exportAdminExcel(
+                                filteredAdminRegistrations,
+                                adminUnitCode ? `${getContestUnitName(adminUnitCode)}-报名信息` : '管理员筛选报名信息'
+                              )
+                            }
+                            className="btn-secondary w-full justify-center"
+                          >
+                            <FileSpreadsheet className="h-4 w-4" />
+                            下载当前筛选 Excel
+                          </button>
+                          <button onClick={() => exportAdminExcel(adminRegistrations, '全部报名信息')} className="btn-secondary w-full justify-center">
+                            <Download className="h-4 w-4" />
+                            下载全部报名 Excel
+                          </button>
+                          <button
+                            onClick={() => setShowResetPanel((current) => !current)}
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-red-200 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-100"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            {showResetPanel ? '收起清空面板' : '清空全部报名数据'}
+                          </button>
+                        </div>
+
+                        {showResetPanel && (
+                          <div className="mt-5 rounded-[22px] border border-red-200 bg-red-50 p-5">
+                            <div className="flex items-start gap-3">
+                              <AlertCircle className="mt-0.5 h-5 w-5 text-red-600" />
+                              <div className="text-sm leading-7 text-red-900">
+                                <p className="font-semibold">危险操作：将永久清空全部报名记录与准考证编号。</p>
+                                <p>此操作不可撤销。请先确认所有报名导出工作已经完成。</p>
+                                <p>请输入“{ADMIN_RESET_CONFIRM_TEXT}”后，才能执行清空。</p>
+                              </div>
+                            </div>
+
+                            <input
+                              value={resetConfirmText}
+                              onChange={(event) => setResetConfirmText(event.target.value)}
+                              className="form-input mt-4 bg-white"
+                              placeholder={`请输入：${ADMIN_RESET_CONFIRM_TEXT}`}
+                            />
+
+                            <button
+                              onClick={() => void handleAdminReset()}
+                              disabled={isResetting || resetConfirmText.trim() !== ADMIN_RESET_CONFIRM_TEXT}
+                              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-red-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {isResetting ? <Loader className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                              确认清空全部报名数据
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="rounded-[24px] border border-white/60 bg-white/78 p-5">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-secondary-500">Overview</p>
+                            <h3 className="mt-2 text-xl font-semibold text-ink">报名进度总览</h3>
+                          </div>
+                          {isAdminLoading && <Loader className="h-5 w-5 animate-spin text-primary-700" />}
+                        </div>
+
+                        <div className="mt-5 grid gap-4 md:grid-cols-3">
+                          <div className="rounded-[20px] border border-[#e5dccd] bg-[#fffaf3] p-5">
+                            <div className="text-sm text-secondary-600">筛选后学生数</div>
+                            <div className="mt-2 text-3xl font-semibold text-ink">{filteredAdminRegistrations.length}</div>
+                          </div>
+                          <div className="rounded-[20px] border border-[#e5dccd] bg-[#fffaf3] p-5">
+                            <div className="text-sm text-secondary-600">已有报名单位</div>
+                            <div className="mt-2 text-3xl font-semibold text-ink">{adminProgress?.summary.registered_units || 0}</div>
+                          </div>
+                          <div className="rounded-[20px] border border-[#e5dccd] bg-[#fffaf3] p-5">
+                            <div className="text-sm text-secondary-600">已有报名学校</div>
+                            <div className="mt-2 text-3xl font-semibold text-ink">{adminProgress?.summary.registered_schools || 0}</div>
+                          </div>
+                        </div>
+
+                        <div className="mt-5 rounded-[22px] border border-[#e5dccd] bg-[#fffaf3] p-5">
+                          <div className="flex items-center gap-2 text-ink">
+                            <BarChart3 className="h-5 w-5 text-primary-700" />
+                            <h4 className="text-lg font-semibold">报名数据预览</h4>
+                          </div>
+
+                          <div className="mt-4 table-container">
+                            <table className="table">
+                              <thead className="table-head">
+                                <tr>
+                                  <th className="table-header">学生姓名</th>
+                                  <th className="table-header">学校</th>
+                                  <th className="table-header">归属</th>
+                                  <th className="table-header">准考证号</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-[#ece4d7]">
+                                {filteredAdminRegistrations.slice(0, 8).map((registration) => (
+                                  <tr key={registration.ticket_number}>
+                                    <td className="table-cell">{registration.student_name}</td>
+                                    <td className="table-cell">{registration.school}</td>
+                                    <td className="table-cell">{getContestUnitName(registration.district_code)}</td>
+                                    <td className="table-cell">{registration.ticket_number}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {filteredAdminRegistrations.length > 8 && (
+                            <p className="mt-3 text-sm text-secondary-500">
+                              当前仅展示前 8 条，实际导出将包含全部 {filteredAdminRegistrations.length} 条报名数据。
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+                      <div className="rounded-[24px] border border-white/60 bg-white/78 p-5">
+                        <h3 className="text-xl font-semibold text-ink">学区 / 学校名额进度</h3>
+                        <div className="mt-5 table-container">
+                          <table className="table">
+                            <thead className="table-head">
+                              <tr>
+                                <th className="table-header">归属</th>
+                                <th className="table-header">已报</th>
+                                <th className="table-header">剩余</th>
+                                <th className="table-header">学校数</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[#ece4d7]">
+                              {filteredUnitProgress.map((item) => (
+                                <tr key={item.code}>
+                                  <td className="table-cell">
+                                    <div className="font-semibold text-ink">{item.name}</div>
+                                    <div className="text-xs text-secondary-500">总名额 {item.quota}</div>
+                                  </td>
+                                  <td className="table-cell">{item.registered_count}</td>
+                                  <td className="table-cell">{item.remaining_quota}</td>
+                                  <td className="table-cell">{item.school_count}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div className="rounded-[24px] border border-white/60 bg-white/78 p-5">
+                        <h3 className="text-xl font-semibold text-ink">学校报名进度</h3>
+                        <div className="mt-5 table-container">
+                          <table className="table">
+                            <thead className="table-head">
+                              <tr>
+                                <th className="table-header">学校</th>
+                                <th className="table-header">归属</th>
+                                <th className="table-header">报名人数</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[#ece4d7]">
+                              {filteredSchoolProgress.slice(0, 20).map((item) => (
+                                <tr key={`${item.district_code}-${item.school}`}>
+                                  <td className="table-cell">{item.school}</td>
+                                  <td className="table-cell">{item.district_name}</td>
+                                  <td className="table-cell">{item.registered_count}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {filteredSchoolProgress.length > 20 && (
+                          <p className="mt-3 text-sm text-secondary-500">
+                            当前仅展示前 20 所学校，实际导出数据会包含全部 {filteredSchoolProgress.length} 所学校的报名情况。
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -314,8 +676,8 @@ const DownloadPage: React.FC = () => {
             <AlertCircle className="mt-1 h-5 w-5 text-primary-700" />
             <div className="text-sm leading-8 text-primary-900">
               <p>• 准考证号格式：年份后两位 + 考场号两位 + 座位号两位（例：260101）</p>
-              <p>• 批量下载会生成一个多页中文 PDF，适合学校或学区统一打印。</p>
-              <p>• 如需按学校再次筛选，可在“批量下载”模式中输入学校名称后导出。</p>
+              <p>• 管理员中心支持查看学区与学校报名进度，并按筛选条件导出准考证和 Excel。</p>
+              <p>• 单条查询适合现场补打，管理员中心适合后期统一汇总下载。</p>
             </div>
           </div>
         </section>

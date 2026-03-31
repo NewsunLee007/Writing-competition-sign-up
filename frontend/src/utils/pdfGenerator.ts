@@ -9,6 +9,8 @@ const BATCH_SLOT_WIDTH = 190
 const BATCH_SLOT_HEIGHT = (297 - PAGE_MARGIN * 2 - PAGE_GAP) / 2
 const SINGLE_SLOT_WIDTH = 190
 const SINGLE_SLOT_HEIGHT = 277
+const SINGLE_IMAGE_QUALITY = 0.9
+const BATCH_IMAGE_QUALITY = 0.82
 
 const waitForImages = async (container: HTMLElement) => {
   const images = Array.from(container.querySelectorAll('img'))
@@ -105,13 +107,13 @@ const createTicketCard = (registration: Registration) => {
           <div style="display:grid;grid-template-columns:1.3fr .86fr;gap:16px;align-items:stretch;margin-top:18px;">
             <div style="border:1px solid #dde1e6;background:#fff;padding:18px 18px 16px;">
               <div style="font-size:14px;font-weight:700;letter-spacing:.06em;color:#334155;">考生信息</div>
-              <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px;">
+              <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px;">
               ${fields
                 .map(
                   ([label, value]) => `
-                    <div style="min-height:90px;border:1px solid #e4e4e2;background:#fcfcfb;padding:12px 14px;">
+                    <div style="min-height:76px;border:1px solid #e4e4e2;background:#fcfcfb;padding:11px 13px;">
                       <div style="font-size:12px;letter-spacing:.02em;color:#6f7782;">${label}</div>
-                      <div style="margin-top:10px;font-size:${label === '学校' ? '17px' : '19px'};font-weight:700;color:#1f2937;word-break:break-word;line-height:1.45;">${value}</div>
+                      <div style="margin-top:8px;font-size:${label === '学校' ? '16px' : '18px'};font-weight:700;color:#1f2937;word-break:break-word;line-height:1.4;">${value}</div>
                     </div>
                   `
                 )
@@ -164,7 +166,7 @@ const createTicketCard = (registration: Registration) => {
   return wrapper
 }
 
-const renderTicketCanvas = async (registration: Registration) => {
+const renderTicketCanvas = async (registration: Registration, scale = 1.8) => {
   const element = createTicketCard(registration)
 
   try {
@@ -173,7 +175,7 @@ const renderTicketCanvas = async (registration: Registration) => {
 
     const canvas = await html2canvas(content, {
       backgroundColor: '#f2f2f0',
-      scale: 2,
+      scale,
       useCORS: true,
     })
 
@@ -188,14 +190,15 @@ export const generateExamTicketPDF = async (registration: Registration) => {
     orientation: 'portrait',
     unit: 'mm',
     format: 'a4',
+    compress: true,
   })
 
-  const canvas = await renderTicketCanvas(registration)
-  const image = canvas.toDataURL('image/png')
+  const canvas = await renderTicketCanvas(registration, 1.9)
+  const image = canvas.toDataURL('image/jpeg', SINGLE_IMAGE_QUALITY)
   const size = fitRect(canvas.width, canvas.height, SINGLE_SLOT_WIDTH, SINGLE_SLOT_HEIGHT)
   const x = (210 - size.width) / 2
   const y = (297 - size.height) / 2
-  doc.addImage(image, 'PNG', x, y, size.width, size.height)
+  doc.addImage(image, 'JPEG', x, y, size.width, size.height)
   doc.save(`准考证-${registration.student_name}-${registration.ticket_number}.pdf`)
 }
 
@@ -207,6 +210,7 @@ export const generateBatchExamTicketsPDF = async (
     orientation: 'portrait',
     unit: 'mm',
     format: 'a4',
+    compress: true,
   })
 
   for (const [index, registration] of registrations.entries()) {
@@ -214,13 +218,13 @@ export const generateBatchExamTicketsPDF = async (
       doc.addPage()
     }
 
-    const canvas = await renderTicketCanvas(registration)
-    const image = canvas.toDataURL('image/png')
+    const canvas = await renderTicketCanvas(registration, 1.6)
+    const image = canvas.toDataURL('image/jpeg', BATCH_IMAGE_QUALITY)
     const size = fitRect(canvas.width, canvas.height, BATCH_SLOT_WIDTH, BATCH_SLOT_HEIGHT)
     const slotY = PAGE_MARGIN + (index % 2) * (BATCH_SLOT_HEIGHT + PAGE_GAP)
     const x = PAGE_MARGIN + (BATCH_SLOT_WIDTH - size.width) / 2
     const y = slotY + (BATCH_SLOT_HEIGHT - size.height) / 2
-    doc.addImage(image, 'PNG', x, y, size.width, size.height)
+    doc.addImage(image, 'JPEG', x, y, size.width, size.height)
   }
 
   doc.save(`${fileBaseName}.pdf`)

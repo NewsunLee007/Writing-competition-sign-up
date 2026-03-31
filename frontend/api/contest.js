@@ -1,3 +1,5 @@
+import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
+
 let sqlClient
 
 const UNIT_META = {
@@ -100,6 +102,152 @@ async function ensureRegistrationColumns(sql) {
   await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS client_ip VARCHAR(64)`
 }
 
+async function ensureAdminTable(sql) {
+  await sql`
+    CREATE TABLE IF NOT EXISTS admin_users (
+      id SERIAL PRIMARY KEY,
+      account VARCHAR(64) UNIQUE NOT NULL,
+      password_hash VARCHAR(255) NOT NULL,
+      full_name VARCHAR(120) NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `
+
+  const existing = await sql`SELECT id FROM admin_users WHERE account = 'admin' LIMIT 1`
+  if (existing.length === 0) {
+    await sql`
+      INSERT INTO admin_users (account, password_hash, full_name)
+      VALUES ('admin', ${hashPassword('admin123')}, '系统管理员')
+    `
+  }
+}
+
+function hashPassword(password) {
+  const salt = randomBytes(16).toString('hex')
+  const hash = scryptSync(password, salt, 64).toString('hex')
+  return `${salt}:${hash}`
+}
+
+function verifyPassword(password, passwordHash) {
+  const [salt, hash] = String(passwordHash || '').split(':')
+  if (!salt || !hash) return false
+  const source = Buffer.from(hash, 'hex')
+  const derived = scryptSync(password, salt, 64)
+  if (source.length !== derived.length) return false
+  return timingSafeEqual(source, derived)
+}
+
+function getAdminTokenSecret() {
+  return process.env.ADMIN_SESSION_SECRET || process.env.JWT_SECRET || process.env.DATABASE_URL || 'ruian-writing-contest-admin'
+}
+
+function createAdminToken(account) {
+  const payload = Buffer.from(
+    JSON.stringify({
+      account,
+      exp: Date.now() + 1000 * 60 * 60 * 12,
+    })
+  ).toString('base64url')
+  const signature = createHmac('sha256', getAdminTokenSecret()).update(payload).digest('base64url')
+  return `${payload}.${signature}`
+}
+
+function verifyAdminToken(token) {
+  if (!token) return null
+  const [payload, signature] = String(token).split('.')
+  if (!payload || !signature) return null
+  const expected = createHmac('sha256', getAdminTokenSecret()).update(payload).digest('base64url')
+  const signatureBuffer = Buffer.from(signature)
+  const expectedBuffer = Buffer.from(expected)
+  if (signatureBuffer.length !== expectedBuffer.length) return null
+  if (!timingSafeEqual(signatureBuffer, expectedBuffer)) return null
+
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
+    if (!data?.account || !data?.exp || Number(data.exp) < Date.now()) return null
+    return data
+  } catch (_error) {
+    return null
+  }
+}
+
+function getBearerToken(req) {
+  const authHeader = req.headers.authorization || req.headers.Authorization
+  if (!authHeader) return ''
+  const [scheme, token] = String(authHeader).split(' ')
+  if (scheme !== 'Bearer' || !token) return ''
+  return token
+}
+
+async function requireAdmin(sql, req) {
+  await ensureAdminTable(sql)
+  const payload = verifyAdminToken(getBearerToken(req))
+  if (!payload?.account) return null
+  const admins = await sql`
+    SELECT account, full_name
+    FROM admin_users
+    WHERE account = ${payload.account}
+    LIMIT 1
+  `
+  return admins[0] || null
+}
+
+function buildAdminProgress(districtRows, registrationRows) {
+  const unitMap = new Map(
+    districtRows.map((row) => [
+      String(row.code),
+      {
+        code: String(row.code),
+        name: getUnitName(row.code, row.name),
+        quota: applyQuotaOverride(row.code, Number(row.quota)),
+        registered_count: 0,
+        remaining_quota: applyQuotaOverride(row.code, Number(row.quota)),
+        school_count: 0,
+      },
+    ])
+  )
+  const schoolMap = new Map()
+
+  for (const row of registrationRows) {
+    const code = String(row.district_code)
+    const unit = unitMap.get(code)
+    if (unit) {
+      unit.registered_count += 1
+      unit.remaining_quota = Math.max(0, unit.quota - unit.registered_count)
+    }
+
+    const schoolKey = `${code}__${String(row.school)}`
+    const currentSchool = schoolMap.get(schoolKey) || {
+      district_code: code,
+      district_name: getUnitName(code, row.district_name),
+      school: String(row.school),
+      registered_count: 0,
+    }
+    currentSchool.registered_count += 1
+    schoolMap.set(schoolKey, currentSchool)
+  }
+
+  for (const school of schoolMap.values()) {
+    const unit = unitMap.get(school.district_code)
+    if (unit) unit.school_count += 1
+  }
+
+  const units = Array.from(unitMap.values()).sort((a, b) => b.registered_count - a.registered_count || a.code.localeCompare(b.code))
+  const schools = Array.from(schoolMap.values()).sort(
+    (a, b) => b.registered_count - a.registered_count || a.school.localeCompare(b.school, 'zh-CN')
+  )
+
+  return {
+    summary: {
+      total_registrations: registrationRows.length,
+      registered_units: units.filter((item) => item.registered_count > 0).length,
+      registered_schools: schools.length,
+    },
+    units,
+    schools,
+  }
+}
+
 function getClientIp(req) {
   const header = req.headers['x-forwarded-for']
   if (Array.isArray(header)) return String(header[0]).split(',')[0].trim()
@@ -159,6 +307,107 @@ export default async function handler(req, res) {
 
       if (segments[1] === 'stats') return sendJson(res, 200, { success: true, data })
       if (segments.length === 1) return sendJson(res, 200, { success: true, data })
+    }
+
+    if (segments[0] === 'admin' && segments[1] === 'login' && req.method === 'POST') {
+      await ensureAdminTable(sql)
+      const body = await readJsonBody(req)
+      const account = String(body?.account || '').trim()
+      const password = String(body?.password || '')
+
+      if (!account || !password) {
+        return sendJson(res, 400, { success: false, message: '请输入管理员账号和密码' })
+      }
+
+      const admins = await sql`
+        SELECT account, password_hash, full_name
+        FROM admin_users
+        WHERE account = ${account}
+        LIMIT 1
+      `
+      const admin = admins[0]
+
+      if (!admin || !verifyPassword(password, admin.password_hash)) {
+        return sendJson(res, 401, { success: false, message: '管理员账号或密码错误' })
+      }
+
+      return sendJson(res, 200, {
+        success: true,
+        message: '管理员登录成功',
+        data: {
+          token: createAdminToken(admin.account),
+          account: admin.account,
+          full_name: admin.full_name,
+        },
+      })
+    }
+
+    if (segments[0] === 'admin' && req.method === 'GET') {
+      const admin = await requireAdmin(sql, req)
+      if (!admin) {
+        return sendJson(res, 401, { success: false, message: '请先登录管理员账户' })
+      }
+
+      if (segments[1] === 'progress') {
+        const districtRows = await sql`SELECT code, name, quota FROM districts ORDER BY name`
+        const registrationRows = await sql`
+          SELECT r.district_code, r.school, d.name AS district_name
+          FROM registrations r
+          LEFT JOIN districts d ON r.district_code = d.code
+          ORDER BY r.registration_time DESC
+        `
+        return sendJson(res, 200, {
+          success: true,
+          data: buildAdminProgress(districtRows, registrationRows),
+        })
+      }
+
+      if (segments[1] === 'registrations') {
+        const districtCode = req.query?.district_code ? String(req.query.district_code) : ''
+        const schoolKeyword = req.query?.school ? String(req.query.school).trim() : ''
+        let result = await sql`
+          SELECT r.*, d.name as district_name
+          FROM registrations r
+          LEFT JOIN districts d ON r.district_code = d.code
+          ORDER BY r.registration_time DESC
+        `
+
+        if (districtCode) {
+          result = result.filter((row) => String(row.district_code) === districtCode)
+        }
+        if (schoolKeyword) {
+          result = result.filter((row) => String(row.school).includes(schoolKeyword))
+        }
+
+        return sendJson(res, 200, { success: true, data: result })
+      }
+    }
+
+    if (segments[0] === 'admin' && segments[1] === 'registrations' && segments[2] === 'reset' && req.method === 'POST') {
+      const admin = await requireAdmin(sql, req)
+      if (!admin) {
+        return sendJson(res, 401, { success: false, message: '请先登录管理员账户' })
+      }
+
+      const body = await readJsonBody(req)
+      const confirmText = String(body?.confirm_text || '').trim()
+
+      if (confirmText !== '确认清空报名数据') {
+        return sendJson(res, 400, {
+          success: false,
+          message: '确认口令不正确，请输入“确认清空报名数据”后再执行',
+        })
+      }
+
+      const countRows = await sql`SELECT COUNT(*)::int AS count FROM registrations`
+      const total = Number(countRows[0]?.count || 0)
+      await sql`TRUNCATE TABLE registrations RESTART IDENTITY`
+
+      return sendJson(res, 200, {
+        success: true,
+        message: `已清空 ${total} 条报名记录`,
+        data: { cleared: total },
+      })
     }
 
     if (segments[0] === 'registrations' && segments[1] === 'batch' && req.method === 'POST') {

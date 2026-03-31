@@ -1,5 +1,6 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
+import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import sql from '../config/database.js';
 
 const router = express.Router();
@@ -61,6 +62,150 @@ const createTicketNumber = (code, seatIndex) => {
 
 const ensureRegistrationColumns = async () => {
   await sql`ALTER TABLE registrations ADD COLUMN IF NOT EXISTS client_ip VARCHAR(64)`;
+};
+
+const ensureAdminTable = async () => {
+  await sql`
+    CREATE TABLE IF NOT EXISTS admin_users (
+      id SERIAL PRIMARY KEY,
+      account VARCHAR(64) UNIQUE NOT NULL,
+      password_hash VARCHAR(255) NOT NULL,
+      full_name VARCHAR(120) NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+
+  const existing = await sql`SELECT id FROM admin_users WHERE account = 'admin' LIMIT 1`;
+  if (existing.length === 0) {
+    await sql`
+      INSERT INTO admin_users (account, password_hash, full_name)
+      VALUES ('admin', ${hashPassword('admin123')}, '系统管理员')
+    `;
+  }
+};
+
+const hashPassword = (password) => {
+  const salt = randomBytes(16).toString('hex');
+  const hash = scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+};
+
+const verifyPassword = (password, passwordHash) => {
+  const [salt, hash] = String(passwordHash || '').split(':');
+  if (!salt || !hash) return false;
+  const source = Buffer.from(hash, 'hex');
+  const derived = scryptSync(password, salt, 64);
+  if (source.length !== derived.length) return false;
+  return timingSafeEqual(source, derived);
+};
+
+const getAdminTokenSecret = () => {
+  return process.env.ADMIN_SESSION_SECRET || process.env.JWT_SECRET || process.env.DATABASE_URL || 'ruian-writing-contest-admin';
+};
+
+const createAdminToken = (account) => {
+  const payload = Buffer.from(JSON.stringify({
+    account,
+    exp: Date.now() + 1000 * 60 * 60 * 12,
+  })).toString('base64url');
+  const signature = createHmac('sha256', getAdminTokenSecret()).update(payload).digest('base64url');
+  return `${payload}.${signature}`;
+};
+
+const verifyAdminToken = (token) => {
+  if (!token) return null;
+  const [payload, signature] = String(token).split('.');
+  if (!payload || !signature) return null;
+  const expected = createHmac('sha256', getAdminTokenSecret()).update(payload).digest('base64url');
+  const signatureBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (signatureBuffer.length !== expectedBuffer.length) return null;
+  if (!timingSafeEqual(signatureBuffer, expectedBuffer)) return null;
+
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    if (!data?.account || !data?.exp || Number(data.exp) < Date.now()) return null;
+    return data;
+  } catch (_error) {
+    return null;
+  }
+};
+
+const getBearerToken = (req) => {
+  const authHeader = req.headers.authorization || req.headers.Authorization;
+  if (!authHeader) return '';
+  const [scheme, token] = String(authHeader).split(' ');
+  if (scheme !== 'Bearer' || !token) return '';
+  return token;
+};
+
+const requireAdmin = async (req) => {
+  await ensureAdminTable();
+  const payload = verifyAdminToken(getBearerToken(req));
+  if (!payload?.account) return null;
+  const admins = await sql`
+    SELECT account, full_name
+    FROM admin_users
+    WHERE account = ${payload.account}
+    LIMIT 1
+  `;
+  return admins[0] || null;
+};
+
+const buildAdminProgress = (districtRows, registrationRows) => {
+  const unitMap = new Map(
+    districtRows.map((row) => [
+      String(row.code),
+      {
+        code: String(row.code),
+        name: getUnitName(row.code, row.name),
+        quota: applyQuotaOverride(row.code, Number(row.quota)),
+        registered_count: 0,
+        remaining_quota: applyQuotaOverride(row.code, Number(row.quota)),
+        school_count: 0,
+      },
+    ])
+  );
+  const schoolMap = new Map();
+
+  for (const row of registrationRows) {
+    const code = String(row.district_code);
+    const unit = unitMap.get(code);
+    if (unit) {
+      unit.registered_count += 1;
+      unit.remaining_quota = Math.max(0, unit.quota - unit.registered_count);
+    }
+
+    const schoolKey = `${code}__${String(row.school)}`;
+    const currentSchool = schoolMap.get(schoolKey) || {
+      district_code: code,
+      district_name: getUnitName(code, row.district_name),
+      school: String(row.school),
+      registered_count: 0,
+    };
+    currentSchool.registered_count += 1;
+    schoolMap.set(schoolKey, currentSchool);
+  }
+
+  for (const school of schoolMap.values()) {
+    const unit = unitMap.get(school.district_code);
+    if (unit) unit.school_count += 1;
+  }
+
+  const units = Array.from(unitMap.values()).sort((a, b) => b.registered_count - a.registered_count || a.code.localeCompare(b.code));
+  const schools = Array.from(schoolMap.values()).sort(
+    (a, b) => b.registered_count - a.registered_count || a.school.localeCompare(b.school, 'zh-CN')
+  );
+
+  return {
+    summary: {
+      total_registrations: registrationRows.length,
+      registered_units: units.filter((item) => item.registered_count > 0).length,
+      registered_schools: schools.length,
+    },
+    units,
+    schools,
+  };
 };
 
 const getClientIp = (req) => {
@@ -150,6 +295,161 @@ router.get('/districts/stats', async (req, res) => {
     res.status(500).json({
       success: false,
       message: '获取统计信息失败',
+    });
+  }
+});
+
+router.post('/admin/login', async (req, res) => {
+  try {
+    await ensureAdminTable();
+    const account = String(req.body?.account || '').trim();
+    const password = String(req.body?.password || '');
+
+    if (!account || !password) {
+      return res.status(400).json({
+        success: false,
+        message: '请输入管理员账号和密码',
+      });
+    }
+
+    const admins = await sql`
+      SELECT account, password_hash, full_name
+      FROM admin_users
+      WHERE account = ${account}
+      LIMIT 1
+    `;
+    const admin = admins[0];
+
+    if (!admin || !verifyPassword(password, admin.password_hash)) {
+      return res.status(401).json({
+        success: false,
+        message: '管理员账号或密码错误',
+      });
+    }
+
+    res.json({
+      success: true,
+      message: '管理员登录成功',
+      data: {
+        token: createAdminToken(admin.account),
+        account: admin.account,
+        full_name: admin.full_name,
+      },
+    });
+  } catch (error) {
+    console.error('管理员登录错误:', error);
+    res.status(500).json({
+      success: false,
+      message: '管理员登录失败',
+    });
+  }
+});
+
+router.get('/admin/progress', async (req, res) => {
+  try {
+    const admin = await requireAdmin(req);
+    if (!admin) {
+      return res.status(401).json({
+        success: false,
+        message: '请先登录管理员账户',
+      });
+    }
+
+    const districtRows = await sql`SELECT code, name, quota FROM districts ORDER BY name`;
+    const registrationRows = await sql`
+      SELECT r.district_code, r.school, d.name AS district_name
+      FROM registrations r
+      LEFT JOIN districts d ON r.district_code = d.code
+      ORDER BY r.registration_time DESC
+    `;
+
+    res.json({
+      success: true,
+      data: buildAdminProgress(districtRows, registrationRows),
+    });
+  } catch (error) {
+    console.error('获取管理员进度错误:', error);
+    res.status(500).json({
+      success: false,
+      message: '获取管理员进度失败',
+    });
+  }
+});
+
+router.get('/admin/registrations', async (req, res) => {
+  try {
+    const admin = await requireAdmin(req);
+    if (!admin) {
+      return res.status(401).json({
+        success: false,
+        message: '请先登录管理员账户',
+      });
+    }
+
+    const districtCode = req.query?.district_code ? String(req.query.district_code) : '';
+    const schoolKeyword = req.query?.school ? String(req.query.school).trim() : '';
+
+    let result = await sql`
+      SELECT r.*, d.name as district_name
+      FROM registrations r
+      LEFT JOIN districts d ON r.district_code = d.code
+      ORDER BY r.registration_time DESC
+    `;
+
+    if (districtCode) {
+      result = result.filter((row) => String(row.district_code) === districtCode);
+    }
+    if (schoolKeyword) {
+      result = result.filter((row) => String(row.school).includes(schoolKeyword));
+    }
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('获取管理员报名数据错误:', error);
+    res.status(500).json({
+      success: false,
+      message: '获取管理员报名数据失败',
+    });
+  }
+});
+
+router.post('/admin/registrations/reset', async (req, res) => {
+  try {
+    const admin = await requireAdmin(req);
+    if (!admin) {
+      return res.status(401).json({
+        success: false,
+        message: '请先登录管理员账户',
+      });
+    }
+
+    const confirmText = String(req.body?.confirm_text || '').trim();
+    if (confirmText !== '确认清空报名数据') {
+      return res.status(400).json({
+        success: false,
+        message: '确认口令不正确，请输入“确认清空报名数据”后再执行',
+      });
+    }
+
+    const countRows = await sql`SELECT COUNT(*)::int AS count FROM registrations`;
+    const total = Number(countRows[0]?.count || 0);
+    await sql`TRUNCATE TABLE registrations RESTART IDENTITY`;
+
+    res.json({
+      success: true,
+      message: `已清空 ${total} 条报名记录`,
+      data: {
+        cleared: total,
+      },
+    });
+  } catch (error) {
+    console.error('清空报名数据错误:', error);
+    res.status(500).json({
+      success: false,
+      message: '清空报名数据失败',
     });
   }
 });
