@@ -406,15 +406,6 @@ const RegistrationPage: React.FC = () => {
       <div className="space-y-6">
         <section className="section-shell p-6 sm:p-8">
           <div className="relative z-10">
-            <h1 className="font-serif text-4xl text-ink sm:text-5xl">报名中心</h1>
-            <p className="mt-4 max-w-3xl text-base leading-8 text-secondary-700">
-              先确定报名归属，再录入学生信息；同一组学生完成后可继续追加，不必重复返回顶部操作。
-            </p>
-          </div>
-        </section>
-
-        <section className="section-shell p-6 sm:p-8">
-          <div className="relative z-10">
             <div className="relative z-10">
               <div className="flex flex-col gap-4 border-b border-[#ded5c6] pb-6 md:flex-row md:items-center md:justify-between">
                 <div>

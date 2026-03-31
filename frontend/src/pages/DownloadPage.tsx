@@ -337,18 +337,6 @@ const DownloadPage: React.FC = () => {
   return (
     <div className="container-responsive py-8">
       <div className="space-y-6">
-        <section className="section-shell p-7 sm:p-10">
-          <div className="relative z-10">
-            <div>
-              <span className="eyebrow">Ticket Download</span>
-              <h1 className="mt-5 font-serif text-4xl text-ink sm:text-5xl">准考证下载中心</h1>
-              <p className="mt-4 max-w-3xl text-base leading-8 text-secondary-700">
-                支持单条查询下载，也支持按学区或学校批量下载；管理人员可登录后查看报名进度并统一导出数据。
-              </p>
-            </div>
-          </div>
-        </section>
-
         <section className="section-shell p-6 sm:p-8">
           <div className="relative z-10">
             <div className="inline-flex rounded-full border border-white/70 bg-white/78 p-1 shadow-[0_10px_35px_rgba(15,23,40,0.08)]">
