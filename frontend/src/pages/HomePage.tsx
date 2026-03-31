@@ -27,8 +27,8 @@ const HomePage: React.FC = () => {
                   { label: '活动地点', value: '瑞安市毓蒙中学', icon: MapPin },
                   { label: '报名截止', value: '4 月 3 日前完成', icon: Clock },
                 ].map((item) => (
-                  <div key={item.label} className="rounded-[24px] border border-white/60 bg-white/75 p-5 shadow-[0_16px_45px_rgba(15,23,40,0.08)]">
-                    <item.icon className="mb-3 h-5 w-5 text-primary-700" />
+                  <div key={item.label} className="rounded-[24px] border border-white/60 bg-white/75 p-5 text-center shadow-[0_16px_45px_rgba(15,23,40,0.08)]">
+                    <item.icon className="mx-auto mb-3 h-5 w-5 text-primary-700" />
                     <p className="text-xs font-semibold uppercase tracking-[0.22em] text-secondary-500">
                       {item.label}
                     </p>
@@ -37,7 +37,7 @@ const HomePage: React.FC = () => {
                 ))}
               </div>
 
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
                 <Link to="/registration" className="btn-primary px-8 py-4 text-base">
                   进入报名中心
                   <ChevronRight className="h-5 w-5" />
@@ -51,17 +51,17 @@ const HomePage: React.FC = () => {
 
           <section className="section-shell p-7 sm:p-10">
             <div className="relative z-10 space-y-8">
-              <div>
+              <div className="text-center">
                 <span className="eyebrow">活动通知 Notice</span>
                 <h2 className="mt-5 font-serif text-4xl text-ink">关于举行瑞安市第三届初中学生英语创意写作评审活动的通知</h2>
               </div>
 
               <div className="space-y-4 text-[15px] leading-8 text-secondary-700 sm:text-base">
-                <p>
+                <p className="indent-[2em]">
                   为激发初中学生的英语写作兴趣，提高学生的写作能力，根据瑞安市教研院工作计划，
                   决定举行瑞安市第三届初中学生英语创意写作评审活动。
                 </p>
-                <p>
+                <p className="indent-[2em]">
                   本次评审对象为瑞安市八年级学生，由各学区和直属学校在选拔基础上按名额推荐参与评审，
                   并于 <span className="font-semibold text-ink">4 月 3 日前</span> 将参赛名单发送至指定邮箱。
                 </p>
