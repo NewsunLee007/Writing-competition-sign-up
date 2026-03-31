@@ -97,6 +97,7 @@ const RegistrationPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [guideActive, setGuideActive] = useState(false)
   const [guideStepIndex, setGuideStepIndex] = useState(0)
+  const [guideFloatingStyle, setGuideFloatingStyle] = useState<React.CSSProperties>({})
   const guideTargetsRef = useRef<Partial<Record<GuideTargetKey, HTMLDivElement | null>>>({})
 
   const guideSteps: GuideStep[] = [
@@ -126,7 +127,7 @@ const RegistrationPage: React.FC = () => {
     },
     {
       title: '最后提交本组报名',
-      description: '确认这一组学生信息无误后，点击这里完成本组报名提交。',
+      description: '确认这一组学生信息无误后，点击这里完成本组报名提交；报名结束后记得下载准考证。',
       mode: 'manual',
       target: 'manual-submit',
     },
@@ -144,7 +145,7 @@ const RegistrationPage: React.FC = () => {
     },
     {
       title: '确认后提交批量报名',
-      description: '预览无误后，点击这里一次性提交整批学生数据。',
+      description: '预览无误后，点击这里一次性提交整批学生数据；报名结束后记得下载准考证。',
       mode: 'batch',
       target: 'batch-submit',
     },
@@ -199,6 +200,43 @@ const RegistrationPage: React.FC = () => {
     }, 120)
 
     return () => window.clearTimeout(timer)
+  }, [currentGuideStep, entryMode, guideActive])
+
+  useEffect(() => {
+    if (!guideActive || !currentGuideStep || typeof window === 'undefined') return
+
+    const updateGuidePosition = () => {
+      const target = guideTargetsRef.current[currentGuideStep.target]
+      if (!target) return
+
+      const rect = target.getBoundingClientRect()
+      const panelWidth = Math.min(360, window.innerWidth - 32)
+      const defaultLeft = rect.right - panelWidth
+      const left = Math.min(
+        Math.max(16, defaultLeft),
+        Math.max(16, window.innerWidth - panelWidth - 16)
+      )
+      const preferredTop = rect.top - 150
+      const fallbackTop = rect.bottom + 12
+      const top = preferredTop >= 16 ? preferredTop : Math.min(fallbackTop, window.innerHeight - 150)
+
+      setGuideFloatingStyle({
+        position: 'fixed',
+        top: `${Math.max(16, top)}px`,
+        left: `${left}px`,
+        width: `${panelWidth}px`,
+        zIndex: 60,
+      })
+    }
+
+    updateGuidePosition()
+    window.addEventListener('scroll', updateGuidePosition, true)
+    window.addEventListener('resize', updateGuidePosition)
+
+    return () => {
+      window.removeEventListener('scroll', updateGuidePosition, true)
+      window.removeEventListener('resize', updateGuidePosition)
+    }
   }, [currentGuideStep, entryMode, guideActive])
 
   const units = useMemo(
@@ -552,7 +590,7 @@ const RegistrationPage: React.FC = () => {
                 <div>
                   <h2 className="font-serif text-3xl text-ink">开始录入</h2>
                   <p className="mt-2 text-sm leading-7 text-secondary-600">
-                    按步骤完成：选择方式 → 选择归属 → 填写学生 → 提交本组报名；如已整理名单，也可直接切换到 Excel 批量导入。
+                    按步骤完成：选择报名类别 → 选择归属 → 填写学生 → 提交本组报名；如已整理名单，也可直接切换到 Excel 批量导入。
                   </p>
                 </div>
 
@@ -587,46 +625,6 @@ const RegistrationPage: React.FC = () => {
                   </button>
                 </div>
               </div>
-
-              {guideActive && currentGuideStep && (
-                <div className="mt-5 rounded-[24px] border border-primary-200 bg-primary-50/90 p-5 shadow-[0_18px_45px_rgba(70,111,221,0.10)]">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="max-w-3xl">
-                      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-primary-700">
-                        <Sparkles className="h-4 w-4" />
-                        新手操作引导 {guideStepIndex + 1} / {guideSteps.length}
-                      </div>
-                      <h3 className="mt-3 text-xl font-semibold text-ink">{currentGuideStep.title}</h3>
-                      <p className="mt-2 text-sm leading-7 text-secondary-700">{currentGuideStep.description}</p>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-3">
-                      <button
-                        onClick={handlePrevGuideStep}
-                        disabled={guideStepIndex === 0}
-                        className="inline-flex items-center gap-2 rounded-full border border-[#d8cfbf] bg-white px-4 py-2 text-sm font-semibold text-secondary-700 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <ArrowLeft className="h-4 w-4" />
-                        上一步
-                      </button>
-                      <button
-                        onClick={handleNextGuideStep}
-                        className="inline-flex items-center gap-2 rounded-full bg-primary-900 px-4 py-2 text-sm font-semibold text-white"
-                      >
-                        {guideStepIndex === guideSteps.length - 1 ? '完成引导' : '下一步'}
-                        <ArrowRight className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={handleCloseGuide}
-                        className="inline-flex items-center gap-2 rounded-full border border-transparent px-4 py-2 text-sm font-semibold text-secondary-500"
-                      >
-                        <X className="h-4 w-4" />
-                        关闭
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {entryMode === 'manual' ? (
                 <div className="mt-6 space-y-6">
@@ -963,6 +961,48 @@ const RegistrationPage: React.FC = () => {
             </div>
           </div>
         </section>
+
+        {guideActive && currentGuideStep && (
+          <div style={guideFloatingStyle} className="pointer-events-none">
+            <div className="pointer-events-auto rounded-[22px] border border-primary-200 bg-primary-50/95 p-4 shadow-[0_18px_45px_rgba(70,111,221,0.14)] backdrop-blur-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-primary-700">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    引导 {guideStepIndex + 1} / {guideSteps.length}
+                  </div>
+                  <h3 className="mt-2 text-base font-semibold text-ink">{currentGuideStep.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-secondary-700">{currentGuideStep.description}</p>
+                </div>
+                <button
+                  onClick={handleCloseGuide}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-secondary-500 transition hover:bg-white/70"
+                  aria-label="关闭引导"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <button
+                  onClick={handlePrevGuideStep}
+                  disabled={guideStepIndex === 0}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#d8cfbf] bg-white text-secondary-700 disabled:cursor-not-allowed disabled:opacity-45"
+                  aria-label="上一步"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={handleNextGuideStep}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary-900 text-white"
+                  aria-label={guideStepIndex === guideSteps.length - 1 ? '完成引导' : '下一步'}
+                >
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
