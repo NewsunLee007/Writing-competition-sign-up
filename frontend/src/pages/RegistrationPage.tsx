@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Plus,
   Trash2,
@@ -10,6 +10,10 @@ import {
   Landmark,
   Building2,
   Users,
+  Sparkles,
+  ArrowRight,
+  ArrowLeft,
+  X,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { apiService, District, Registration } from '../services/api'
@@ -46,6 +50,24 @@ interface StudentDraft {
 type EntryMode = 'manual' | 'batch'
 const PHONE_REGEX = /^1[3-9]\d{9}$/
 const normalizePhone = (value: string) => value.replace(/\D/g, '').slice(0, 11)
+const GUIDE_STORAGE_KEY = 'contest_registration_guide_seen'
+
+type GuideTargetKey =
+  | 'entry-mode'
+  | 'manual-type'
+  | 'manual-unit'
+  | 'manual-students'
+  | 'manual-submit'
+  | 'batch-template'
+  | 'batch-upload'
+  | 'batch-submit'
+
+type GuideStep = {
+  title: string
+  description: string
+  mode: EntryMode
+  target: GuideTargetKey
+}
 
 const createStudentDraft = (
   unitType: RegistrationUnitType = 'district',
@@ -73,6 +95,74 @@ const RegistrationPage: React.FC = () => {
   const [generatedTickets, setGeneratedTickets] = useState<Registration[]>([])
   const [isSuccess, setIsSuccess] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [guideActive, setGuideActive] = useState(false)
+  const [guideStepIndex, setGuideStepIndex] = useState(0)
+  const guideTargetsRef = useRef<Partial<Record<GuideTargetKey, HTMLDivElement | null>>>({})
+
+  const guideSteps: GuideStep[] = [
+    {
+      title: '先选择录入方式',
+      description: '老师既可以逐个手工录入，也可以直接切换到 Excel 批量导入。',
+      mode: 'manual',
+      target: 'entry-mode',
+    },
+    {
+      title: '手工录入先选报名类别',
+      description: '先确定是学区推荐还是直属学校报名，系统会按对应规则限制名额。',
+      mode: 'manual',
+      target: 'manual-type',
+    },
+    {
+      title: '再选择具体归属',
+      description: '这里选择具体学区或直属学校，系统会同步显示剩余名额。',
+      mode: 'manual',
+      target: 'manual-unit',
+    },
+    {
+      title: '在这里填写学生信息',
+      description: '录完一位学生后可以继续添加下一位，不需要返回顶部重复操作。',
+      mode: 'manual',
+      target: 'manual-students',
+    },
+    {
+      title: '最后提交本组报名',
+      description: '确认这一组学生信息无误后，点击这里完成本组报名提交。',
+      mode: 'manual',
+      target: 'manual-submit',
+    },
+    {
+      title: '批量导入先下载模板',
+      description: '如果老师手上已有学生名单，可以下载模板后统一整理，再进行批量导入。',
+      mode: 'batch',
+      target: 'batch-template',
+    },
+    {
+      title: '上传 Excel 批量导入',
+      description: '按模板整理完成后，在这里选择 Excel 文件，系统会先预览再统一提交。',
+      mode: 'batch',
+      target: 'batch-upload',
+    },
+    {
+      title: '确认后提交批量报名',
+      description: '预览无误后，点击这里一次性提交整批学生数据。',
+      mode: 'batch',
+      target: 'batch-submit',
+    },
+  ]
+
+  const currentGuideStep = guideSteps[guideStepIndex]
+
+  const registerGuideTarget = (key: GuideTargetKey) => (element: HTMLDivElement | null) => {
+    guideTargetsRef.current[key] = element
+  }
+
+  const isGuideTargetActive = (key: GuideTargetKey) =>
+    guideActive && currentGuideStep?.target === key
+
+  const getGuideTargetClassName = (key: GuideTargetKey) =>
+    isGuideTargetActive(key)
+      ? 'ring-2 ring-primary-300 ring-offset-4 ring-offset-[#f7f3ec] shadow-[0_18px_45px_rgba(70,111,221,0.16)] transition-all'
+      : ''
 
   useEffect(() => {
     const loadDistricts = async () => {
@@ -86,6 +176,30 @@ const RegistrationPage: React.FC = () => {
 
     loadDistricts()
   }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const hasSeenGuide = window.localStorage.getItem(GUIDE_STORAGE_KEY)
+    if (!hasSeenGuide) {
+      setGuideActive(true)
+      setGuideStepIndex(0)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!guideActive || !currentGuideStep) return
+    if (entryMode !== currentGuideStep.mode) {
+      setEntryMode(currentGuideStep.mode)
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      const target = guideTargetsRef.current[currentGuideStep.target]
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 120)
+
+    return () => window.clearTimeout(timer)
+  }, [currentGuideStep, entryMode, guideActive])
 
   const units = useMemo(
     () =>
@@ -339,6 +453,33 @@ const RegistrationPage: React.FC = () => {
     setEntryMode('manual')
   }
 
+  const handleStartGuide = (stepIndex = 0) => {
+    setGuideStepIndex(stepIndex)
+    setGuideActive(true)
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(GUIDE_STORAGE_KEY, '1')
+    }
+  }
+
+  const handleCloseGuide = () => {
+    setGuideActive(false)
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(GUIDE_STORAGE_KEY, '1')
+    }
+  }
+
+  const handleNextGuideStep = () => {
+    if (guideStepIndex >= guideSteps.length - 1) {
+      handleCloseGuide()
+      return
+    }
+    setGuideStepIndex((current) => current + 1)
+  }
+
+  const handlePrevGuideStep = () => {
+    setGuideStepIndex((current) => Math.max(0, current - 1))
+  }
+
   if (isSuccess) {
     return (
       <div className="container-responsive py-8">
@@ -410,33 +551,90 @@ const RegistrationPage: React.FC = () => {
               <div className="flex flex-col gap-4 border-b border-[#ded5c6] pb-6 md:flex-row md:items-center md:justify-between">
                 <div>
                   <h2 className="font-serif text-3xl text-ink">开始录入</h2>
-                  <p className="mt-2 text-sm leading-7 text-secondary-600">按步骤完成：选择方式 → 选择归属 → 填写学生 → 提交本组报名。</p>
+                  <p className="mt-2 text-sm leading-7 text-secondary-600">
+                    按步骤完成：选择方式 → 选择归属 → 填写学生 → 提交本组报名；如已整理名单，也可直接切换到 Excel 批量导入。
+                  </p>
                 </div>
 
-                <div className="inline-flex rounded-full border border-white/70 bg-white/78 p-1 shadow-[0_10px_35px_rgba(15,23,40,0.08)]">
-                  <button
-                    onClick={() => setEntryMode('manual')}
-                    className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                      entryMode === 'manual' ? 'bg-primary-900 text-white' : 'text-secondary-600'
-                    }`}
+                <div className="flex flex-col gap-3 sm:items-end">
+                  <div
+                    ref={registerGuideTarget('entry-mode')}
+                    className={`inline-flex rounded-full border border-white/70 bg-white/78 p-1 shadow-[0_10px_35px_rgba(15,23,40,0.08)] ${getGuideTargetClassName('entry-mode')}`}
                   >
-                    手工录入
-                  </button>
+                    <button
+                      onClick={() => setEntryMode('manual')}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                        entryMode === 'manual' ? 'bg-primary-900 text-white' : 'text-secondary-600'
+                      }`}
+                    >
+                      手工录入
+                    </button>
+                    <button
+                      onClick={() => setEntryMode('batch')}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                        entryMode === 'batch' ? 'bg-primary-900 text-white' : 'text-secondary-600'
+                      }`}
+                    >
+                      Excel 批量导入
+                    </button>
+                  </div>
                   <button
-                    onClick={() => setEntryMode('batch')}
-                    className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                      entryMode === 'batch' ? 'bg-primary-900 text-white' : 'text-secondary-600'
-                    }`}
+                    onClick={() => handleStartGuide(0)}
+                    className="inline-flex items-center gap-2 rounded-full border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-semibold text-primary-800"
                   >
-                    Excel 批量导入
+                    <Sparkles className="h-4 w-4" />
+                    新手引导
                   </button>
                 </div>
               </div>
 
+              {guideActive && currentGuideStep && (
+                <div className="mt-5 rounded-[24px] border border-primary-200 bg-primary-50/90 p-5 shadow-[0_18px_45px_rgba(70,111,221,0.10)]">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="max-w-3xl">
+                      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-primary-700">
+                        <Sparkles className="h-4 w-4" />
+                        新手操作引导 {guideStepIndex + 1} / {guideSteps.length}
+                      </div>
+                      <h3 className="mt-3 text-xl font-semibold text-ink">{currentGuideStep.title}</h3>
+                      <p className="mt-2 text-sm leading-7 text-secondary-700">{currentGuideStep.description}</p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        onClick={handlePrevGuideStep}
+                        disabled={guideStepIndex === 0}
+                        className="inline-flex items-center gap-2 rounded-full border border-[#d8cfbf] bg-white px-4 py-2 text-sm font-semibold text-secondary-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                        上一步
+                      </button>
+                      <button
+                        onClick={handleNextGuideStep}
+                        className="inline-flex items-center gap-2 rounded-full bg-primary-900 px-4 py-2 text-sm font-semibold text-white"
+                      >
+                        {guideStepIndex === guideSteps.length - 1 ? '完成引导' : '下一步'}
+                        <ArrowRight className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={handleCloseGuide}
+                        className="inline-flex items-center gap-2 rounded-full border border-transparent px-4 py-2 text-sm font-semibold text-secondary-500"
+                      >
+                        <X className="h-4 w-4" />
+                        关闭
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {entryMode === 'manual' ? (
                 <div className="mt-6 space-y-6">
                   <div className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
-                    <div className="rounded-[24px] border border-white/60 bg-white/78 p-5">
+                    <div
+                      ref={registerGuideTarget('manual-type')}
+                      className={`rounded-[24px] border border-white/60 bg-white/78 p-5 ${getGuideTargetClassName('manual-type')}`}
+                    >
                       <p className="text-xs font-semibold uppercase tracking-[0.24em] text-secondary-500">步骤 1</p>
                       <h3 className="mt-2 text-xl font-semibold text-ink">选择报名类别</h3>
                       <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -471,7 +669,10 @@ const RegistrationPage: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="rounded-[24px] border border-white/60 bg-white/78 p-5">
+                    <div
+                      ref={registerGuideTarget('manual-unit')}
+                      className={`rounded-[24px] border border-white/60 bg-white/78 p-5 ${getGuideTargetClassName('manual-unit')}`}
+                    >
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-secondary-500">步骤 2</p>
@@ -504,7 +705,10 @@ const RegistrationPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="rounded-[28px] border border-white/60 bg-white/78 p-5">
+                  <div
+                    ref={registerGuideTarget('manual-students')}
+                    className={`rounded-[28px] border border-white/60 bg-white/78 p-5 ${getGuideTargetClassName('manual-students')}`}
+                  >
                     <div className="border-b border-[#ece4d7] pb-5">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-secondary-500">步骤 3</p>
@@ -637,19 +841,24 @@ const RegistrationPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => void handleManualSubmit()}
-                    disabled={isLoading}
-                    className="btn-primary w-full justify-center px-8 py-4 text-base disabled:opacity-60"
-                  >
-                    {isLoading ? <Loader className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-                    提交本组报名
-                  </button>
+                  <div ref={registerGuideTarget('manual-submit')} className={getGuideTargetClassName('manual-submit')}>
+                    <button
+                      onClick={() => void handleManualSubmit()}
+                      disabled={isLoading}
+                      className="btn-primary w-full justify-center px-8 py-4 text-base disabled:opacity-60"
+                    >
+                      {isLoading ? <Loader className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                      提交本组报名
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="mt-6 space-y-6">
                   <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-                    <div className="rounded-[24px] border border-white/60 bg-white/78 p-5">
+                    <div
+                      ref={registerGuideTarget('batch-template')}
+                      className={`rounded-[24px] border border-white/60 bg-white/78 p-5 ${getGuideTargetClassName('batch-template')}`}
+                    >
                       <div className="flex items-center gap-3">
                         <FileSpreadsheet className="h-5 w-5 text-primary-700" />
                         <div>
@@ -670,7 +879,10 @@ const RegistrationPage: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="rounded-[24px] border border-white/60 bg-white/78 p-5">
+                    <div
+                      ref={registerGuideTarget('batch-upload')}
+                      className={`rounded-[24px] border border-white/60 bg-white/78 p-5 ${getGuideTargetClassName('batch-upload')}`}
+                    >
                       <div className="flex items-center gap-3">
                         <Upload className="h-5 w-5 text-primary-700" />
                         <div>
@@ -734,14 +946,16 @@ const RegistrationPage: React.FC = () => {
                         <p className="text-sm text-secondary-500">已预览前 12 条，实际将提交全部 {uploadedStudents.length} 条数据。</p>
                       )}
 
-                      <button
-                        onClick={() => void handleBatchSubmit()}
-                        disabled={isLoading}
-                        className="btn-primary w-full justify-center px-8 py-4 text-base disabled:opacity-60"
-                      >
-                        {isLoading ? <Loader className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />}
-                        提交批量报名
-                      </button>
+                      <div ref={registerGuideTarget('batch-submit')} className={getGuideTargetClassName('batch-submit')}>
+                        <button
+                          onClick={() => void handleBatchSubmit()}
+                          disabled={isLoading}
+                          className="btn-primary w-full justify-center px-8 py-4 text-base disabled:opacity-60"
+                        >
+                          {isLoading ? <Loader className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />}
+                          提交批量报名
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

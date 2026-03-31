@@ -51,8 +51,8 @@ const HomePage: React.FC = () => {
 
           <section className="section-shell p-7 sm:p-10">
             <div className="relative z-10 space-y-8">
-              <div className="text-center">
-                <span className="eyebrow">活动通知 Notice</span>
+              <div>
+                <span className="eyebrow inline-flex">活动通知 Notice</span>
                 <h2 className="mt-5 font-serif text-4xl text-ink">关于举行瑞安市第三届初中学生英语创意写作评审活动的通知</h2>
               </div>
 
