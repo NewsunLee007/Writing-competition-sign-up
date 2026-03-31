@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   Plus,
   Trash2,
@@ -10,7 +10,6 @@ import {
   Landmark,
   Building2,
   Users,
-  Sparkles,
   ArrowRight,
   ArrowLeft,
   X,
@@ -169,11 +168,10 @@ const RegistrationPage: React.FC = () => {
     const target = guideTargetsRef.current[currentGuideStep.target]
     if (!target) return
 
-    const rect = target.getBoundingClientRect()
-    const offsetTop = window.scrollY + rect.top - Math.max(140, window.innerHeight * 0.22)
-    window.scrollTo({
-      top: Math.max(0, offsetTop),
+    target.scrollIntoView({
       behavior,
+      block: 'center',
+      inline: 'nearest',
     })
   }, [currentGuideStep])
 
@@ -195,19 +193,20 @@ const RegistrationPage: React.FC = () => {
     setGuideStepIndex(0)
   }, [])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!guideActive || !currentGuideStep) return
     if (entryMode !== currentGuideStep.mode) {
       setEntryMode(currentGuideStep.mode)
       return
     }
 
-    const timer = window.setTimeout(() => {
-      scrollGuideTargetIntoView('smooth')
-      window.setTimeout(() => scrollGuideTargetIntoView('auto'), 260)
-    }, 120)
+    const timers = [
+      window.setTimeout(() => scrollGuideTargetIntoView('auto'), 30),
+      window.setTimeout(() => scrollGuideTargetIntoView('smooth'), 180),
+      window.setTimeout(() => scrollGuideTargetIntoView('auto'), 420),
+    ]
 
-    return () => window.clearTimeout(timer)
+    return () => timers.forEach((timer) => window.clearTimeout(timer))
   }, [currentGuideStep, entryMode, guideActive, scrollGuideTargetIntoView])
 
   useEffect(() => {
@@ -499,11 +498,6 @@ const RegistrationPage: React.FC = () => {
     setEntryMode('manual')
   }
 
-  const handleStartGuide = (stepIndex = 0) => {
-    setGuideStepIndex(stepIndex)
-    setGuideActive(true)
-  }
-
   const handleCloseGuide = () => {
     setGuideActive(false)
   }
@@ -618,13 +612,6 @@ const RegistrationPage: React.FC = () => {
                       Excel 批量导入
                     </button>
                   </div>
-                  <button
-                    onClick={() => handleStartGuide(0)}
-                    className="inline-flex items-center gap-2 rounded-full border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-semibold text-primary-800"
-                  >
-                    <Sparkles className="h-4 w-4" />
-                    新手引导
-                  </button>
                 </div>
               </div>
 
@@ -873,9 +860,6 @@ const RegistrationPage: React.FC = () => {
                           <Download className="h-4 w-4" />
                           下载 Excel 模板
                         </a>
-                        <a href="/batch-registration-template.xlsx" download className="btn-secondary">
-                          另存为本地文件
-                        </a>
                       </div>
                     </div>
 
@@ -969,10 +953,9 @@ const RegistrationPage: React.FC = () => {
             <div className="pointer-events-auto rounded-[22px] border border-primary-200 bg-primary-50/95 p-4 shadow-[0_18px_45px_rgba(70,111,221,0.14)] backdrop-blur-sm">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-primary-700">
-                    <Sparkles className="h-3.5 w-3.5" />
-                    引导 {guideStepIndex + 1} / {guideSteps.length}
-                  </div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-primary-700">
+                        引导 {guideStepIndex + 1} / {guideSteps.length}
+                      </div>
                   <h3 className="mt-2 text-base font-semibold text-ink">{currentGuideStep.title}</h3>
                   <p className="mt-2 text-sm leading-6 text-secondary-700">{currentGuideStep.description}</p>
                 </div>
