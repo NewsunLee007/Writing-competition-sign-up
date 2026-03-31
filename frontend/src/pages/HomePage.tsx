@@ -5,7 +5,6 @@ import {
   MapPin,
   Clock,
   ChevronRight,
-  Mail,
 } from 'lucide-react'
 
 const HomePage: React.FC = () => {
@@ -53,7 +52,7 @@ const HomePage: React.FC = () => {
             <div className="relative z-10 space-y-8">
               <div>
                 <span className="eyebrow inline-flex">活动通知 Notice</span>
-                <h2 className="mt-5 font-serif text-4xl text-ink">关于举行瑞安市第三届初中学生英语创意写作评审活动的通知</h2>
+                <h2 className="mt-5 text-center font-serif text-4xl text-ink">关于举行瑞安市第三届初中学生英语创意写作评审活动的通知</h2>
               </div>
 
               <div className="space-y-4 text-[15px] leading-8 text-secondary-700 sm:text-base">
@@ -63,7 +62,7 @@ const HomePage: React.FC = () => {
                 </p>
                 <p className="indent-[2em]">
                   本次评审对象为瑞安市八年级学生，由各学区和直属学校在选拔基础上按名额推荐参与评审，
-                  并于 <span className="font-semibold text-ink">4 月 3 日前</span> 将参赛名单发送至指定邮箱。
+                  并于 <span className="font-semibold text-ink">4 月 3 日前</span> 完成在线报名。
                 </p>
               </div>
 
@@ -73,10 +72,6 @@ const HomePage: React.FC = () => {
                   <p>活动地点：瑞安市毓蒙中学。</p>
                   <p>活动内容：现场作文，现场评审。</p>
                   <p>本次活动由瑞安市毓蒙中学承办，全程免费，参赛学生和带队教师差旅费回原单位报销。</p>
-                  <p className="flex items-center gap-2 text-secondary-700">
-                    <Mail className="h-4 w-4 text-primary-700" />
-                    报名邮箱：26392666@qq.com
-                  </p>
                 </div>
               </div>
             </div>

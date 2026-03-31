@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Plus,
   Trash2,
@@ -50,7 +50,6 @@ interface StudentDraft {
 type EntryMode = 'manual' | 'batch'
 const PHONE_REGEX = /^1[3-9]\d{9}$/
 const normalizePhone = (value: string) => value.replace(/\D/g, '').slice(0, 11)
-const GUIDE_STORAGE_KEY = 'contest_registration_guide_seen'
 
 type GuideTargetKey =
   | 'entry-mode'
@@ -165,6 +164,19 @@ const RegistrationPage: React.FC = () => {
       ? 'ring-2 ring-primary-300 ring-offset-4 ring-offset-[#f7f3ec] shadow-[0_18px_45px_rgba(70,111,221,0.16)] transition-all'
       : ''
 
+  const scrollGuideTargetIntoView = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    if (typeof window === 'undefined' || !currentGuideStep) return
+    const target = guideTargetsRef.current[currentGuideStep.target]
+    if (!target) return
+
+    const rect = target.getBoundingClientRect()
+    const offsetTop = window.scrollY + rect.top - Math.max(140, window.innerHeight * 0.22)
+    window.scrollTo({
+      top: Math.max(0, offsetTop),
+      behavior,
+    })
+  }, [currentGuideStep])
+
   useEffect(() => {
     const loadDistricts = async () => {
       const response = await apiService.getDistricts()
@@ -179,12 +191,8 @@ const RegistrationPage: React.FC = () => {
   }, [])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const hasSeenGuide = window.localStorage.getItem(GUIDE_STORAGE_KEY)
-    if (!hasSeenGuide) {
-      setGuideActive(true)
-      setGuideStepIndex(0)
-    }
+    setGuideActive(true)
+    setGuideStepIndex(0)
   }, [])
 
   useEffect(() => {
@@ -195,12 +203,12 @@ const RegistrationPage: React.FC = () => {
     }
 
     const timer = window.setTimeout(() => {
-      const target = guideTargetsRef.current[currentGuideStep.target]
-      target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      scrollGuideTargetIntoView('smooth')
+      window.setTimeout(() => scrollGuideTargetIntoView('auto'), 260)
     }, 120)
 
     return () => window.clearTimeout(timer)
-  }, [currentGuideStep, entryMode, guideActive])
+  }, [currentGuideStep, entryMode, guideActive, scrollGuideTargetIntoView])
 
   useEffect(() => {
     if (!guideActive || !currentGuideStep || typeof window === 'undefined') return
@@ -494,16 +502,10 @@ const RegistrationPage: React.FC = () => {
   const handleStartGuide = (stepIndex = 0) => {
     setGuideStepIndex(stepIndex)
     setGuideActive(true)
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(GUIDE_STORAGE_KEY, '1')
-    }
   }
 
   const handleCloseGuide = () => {
     setGuideActive(false)
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(GUIDE_STORAGE_KEY, '1')
-    }
   }
 
   const handleNextGuideStep = () => {
