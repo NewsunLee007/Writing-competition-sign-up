@@ -9,7 +9,7 @@ const Layout: React.FC = () => {
   const mainNavItems = [
     { path: '/', label: '活动概览', icon: <Home className="h-4 w-4" /> },
     { path: '/registration', label: '报名中心', icon: <ClipboardList className="h-4 w-4" /> },
-    { path: '/download', label: '准考证与下载', icon: <Download className="h-4 w-4" /> },
+    { path: '/download', label: '准考证中心', icon: <Download className="h-4 w-4" /> },
   ]
 
   const isActive = (path: string) => location.pathname === path

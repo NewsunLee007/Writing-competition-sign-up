@@ -18,7 +18,10 @@ const DownloadPage: React.FC = () => {
   const [isSearching, setIsSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
   const [isLoadingPublicBatch, setIsLoadingPublicBatch] = useState(false)
-  const [downloadMode, setDownloadMode] = useState<'single' | 'batch' | 'admin'>('single')
+  const [downloadMode, setDownloadMode] = useState<'single' | 'edit' | 'batch' | 'admin'>('single')
+  const [editTicketNumber, setEditTicketNumber] = useState('')
+  const [editLeaderPhoneInput, setEditLeaderPhoneInput] = useState('')
+  const [isEditSearching, setIsEditSearching] = useState(false)
   const [publicBatchUnitType, setPublicBatchUnitType] = useState<RegistrationUnitType>('district')
   const [publicBatchUnitCode, setPublicBatchUnitCode] = useState('')
   const [publicSchoolFilter, setPublicSchoolFilter] = useState('')
@@ -358,10 +361,10 @@ const DownloadPage: React.FC = () => {
     }
   }
 
-  const openEditModal = (registration: Registration, asAdmin: boolean) => {
+  const openEditModal = (registration: Registration, asAdmin: boolean, verifyPhone?: string) => {
     setEditingRegistration(registration)
     setIsEditingAsAdmin(asAdmin)
-    setEditVerifyPhone('')
+    setEditVerifyPhone(verifyPhone ? String(verifyPhone).trim() : '')
     setEditForm({
       student_name: registration.student_name || '',
       school: registration.school || '',
@@ -447,6 +450,38 @@ const DownloadPage: React.FC = () => {
       closeEditModal()
     } finally {
       setIsSavingEdit(false)
+    }
+  }
+
+  const handleOpenEditEntry = async () => {
+    const ticket = editTicketNumber.trim()
+    const phone = editLeaderPhoneInput.trim()
+
+    if (!ticket) {
+      toast.error('请输入准考证号')
+      return
+    }
+    if (!/^\d{6}$/.test(ticket)) {
+      toast.error('准考证号格式应为 6 位数字')
+      return
+    }
+    if (!PHONE_REGEX.test(phone)) {
+      toast.error('请输入正确的带队教师电话（11 位手机号）')
+      return
+    }
+
+    setIsEditSearching(true)
+    try {
+      const response = await apiService.searchRegistrations({ ticket_number: ticket })
+      if (!response.success || !response.data || response.data.length === 0) {
+        toast.error(response.message || '未找到对应的报名记录')
+        return
+      }
+
+      const exact = response.data.find((item) => String(item.ticket_number) === ticket)
+      openEditModal(exact || response.data[0], false, phone)
+    } finally {
+      setIsEditSearching(false)
     }
   }
 
@@ -551,6 +586,12 @@ const DownloadPage: React.FC = () => {
                 单条查询
               </button>
               <button
+                onClick={() => setDownloadMode('edit')}
+                className={`rounded-full px-4 py-2 text-sm font-semibold ${downloadMode === 'edit' ? 'bg-primary-900 text-white' : 'text-secondary-600'}`}
+              >
+                报名修改
+              </button>
+              <button
                 onClick={() => setDownloadMode('batch')}
                 className={`rounded-full px-4 py-2 text-sm font-semibold ${downloadMode === 'batch' ? 'bg-primary-900 text-white' : 'text-secondary-600'}`}
               >
@@ -622,6 +663,48 @@ const DownloadPage: React.FC = () => {
                     )}
                   </div>
                 )}
+              </div>
+            ) : downloadMode === 'edit' ? (
+              <div className="mt-6 space-y-5">
+                <div className="rounded-[24px] border border-white/60 bg-white/78 p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-2xl font-semibold text-ink">报名信息修改</h3>
+                      <p className="mt-2 text-sm leading-7 text-secondary-600">
+                        输入准考证号与带队教师电话进行校验后，可对报名信息进行二次修改。
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-4 md:grid-cols-[1fr_1fr_auto]">
+                    <div>
+                      <label className="form-label">准考证号</label>
+                      <input
+                        value={editTicketNumber}
+                        onChange={(event) => setEditTicketNumber(event.target.value.trim())}
+                        onKeyDown={(event) => event.key === 'Enter' && void handleOpenEditEntry()}
+                        className="form-input"
+                        placeholder="例如：260101"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">带队教师电话（校验用）</label>
+                      <input
+                        value={editLeaderPhoneInput}
+                        onChange={(event) => setEditLeaderPhoneInput(event.target.value.trim())}
+                        onKeyDown={(event) => event.key === 'Enter' && void handleOpenEditEntry()}
+                        className="form-input"
+                        placeholder="11 位手机号"
+                      />
+                    </div>
+                    <div className="md:pt-[30px]">
+                      <button onClick={() => void handleOpenEditEntry()} disabled={isEditSearching} className="btn-primary min-w-[160px]">
+                        {isEditSearching ? <Loader className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+                        查找并修改
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             ) : downloadMode === 'batch' ? (
               <div className="mt-6 space-y-5">
