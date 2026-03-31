@@ -12,11 +12,16 @@ const ADMIN_RESET_CONFIRM_TEXT = '确认清空报名数据'
 const DownloadPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [searchResults, setSearchResults] = useState<Registration[]>([])
+  const [allRegistrations, setAllRegistrations] = useState<Registration[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
-  const [downloadMode, setDownloadMode] = useState<'single' | 'admin'>('single')
-  const [adminAccount, setAdminAccount] = useState('admin')
-  const [adminPassword, setAdminPassword] = useState('admin123')
+  const [isLoadingPublicBatch, setIsLoadingPublicBatch] = useState(false)
+  const [downloadMode, setDownloadMode] = useState<'single' | 'batch' | 'admin'>('single')
+  const [publicBatchUnitType, setPublicBatchUnitType] = useState<RegistrationUnitType>('district')
+  const [publicBatchUnitCode, setPublicBatchUnitCode] = useState('')
+  const [publicSchoolFilter, setPublicSchoolFilter] = useState('')
+  const [adminAccount, setAdminAccount] = useState('')
+  const [adminPassword, setAdminPassword] = useState('')
   const [adminToken, setAdminToken] = useState('')
   const [adminProgress, setAdminProgress] = useState<AdminProgress | null>(null)
   const [adminRegistrations, setAdminRegistrations] = useState<Registration[]>([])
@@ -29,6 +34,20 @@ const DownloadPage: React.FC = () => {
   const [isResetting, setIsResetting] = useState(false)
 
   useEffect(() => {
+    const loadPublicRegistrations = async () => {
+      setIsLoadingPublicBatch(true)
+      try {
+        const response = await apiService.getAllRegistrations()
+        if (response.success && response.data) {
+          setAllRegistrations(response.data)
+        }
+      } finally {
+        setIsLoadingPublicBatch(false)
+      }
+    }
+
+    void loadPublicRegistrations()
+
     const savedToken = window.localStorage.getItem(ADMIN_TOKEN_KEY)
     if (!savedToken) return
 
@@ -41,6 +60,23 @@ const DownloadPage: React.FC = () => {
 
     void restoreAdminSession()
   }, [])
+
+  const publicBatchOptions = useMemo(
+    () => CONTEST_UNITS.filter((unit) => unit.type === publicBatchUnitType),
+    [publicBatchUnitType]
+  )
+
+  const filteredPublicBatchRegistrations = useMemo(() => {
+    const allowedCodes = new Set(publicBatchOptions.map((unit) => unit.code))
+    return allRegistrations.filter((registration) => {
+      if (!allowedCodes.has(registration.district_code)) return false
+      const matchesUnit = publicBatchUnitCode ? registration.district_code === publicBatchUnitCode : true
+      const matchesSchool = publicSchoolFilter.trim()
+        ? registration.school.toLowerCase().includes(publicSchoolFilter.trim().toLowerCase())
+        : true
+      return matchesUnit && matchesSchool
+    })
+  }, [allRegistrations, publicBatchOptions, publicBatchUnitCode, publicSchoolFilter])
 
   const adminOptions = useMemo(
     () => CONTEST_UNITS.filter((unit) => unit.type === adminUnitType),
@@ -193,6 +229,26 @@ const DownloadPage: React.FC = () => {
     }
   }
 
+  const handlePublicBatchDownload = async () => {
+    if (!filteredPublicBatchRegistrations.length) {
+      toast.error('当前筛选结果为空')
+      return
+    }
+
+    try {
+      const label = publicBatchUnitCode
+        ? `${getContestUnitName(publicBatchUnitCode)}准考证`
+        : publicSchoolFilter
+        ? `${publicSchoolFilter}-学校筛选准考证`
+        : '批量准考证'
+
+      await generateBatchExamTicketsPDF(filteredPublicBatchRegistrations, label)
+      toast.success(`已生成 ${filteredPublicBatchRegistrations.length} 份准考证`)
+    } catch (_error) {
+      toast.error('批量下载失败，请重试')
+    }
+  }
+
   const handleAdminTicketDownload = async () => {
     if (!filteredAdminRegistrations.length) {
       toast.error('当前筛选结果为空')
@@ -282,33 +338,13 @@ const DownloadPage: React.FC = () => {
     <div className="container-responsive py-8">
       <div className="space-y-6">
         <section className="section-shell p-7 sm:p-10">
-          <div className="relative z-10 panel-grid items-start">
+          <div className="relative z-10">
             <div>
-              <span className="eyebrow">Ticket & Admin Center</span>
-              <h1 className="mt-5 font-serif text-4xl text-ink sm:text-5xl">准考证与管理员中心</h1>
+              <span className="eyebrow">Ticket Download</span>
+              <h1 className="mt-5 font-serif text-4xl text-ink sm:text-5xl">准考证下载中心</h1>
               <p className="mt-4 max-w-3xl text-base leading-8 text-secondary-700">
-                普通使用支持按准考证号、姓名、学校检索单个学生；管理员可统一查看报名进度并导出准考证与 Excel 数据。
+                支持单条查询下载，也支持按学区或学校批量下载；管理人员可登录后查看报名进度并统一导出数据。
               </p>
-            </div>
-
-            <div className="rounded-[24px] border border-white/60 bg-[#10203c] p-6 text-white">
-              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-white/40">
-                Admin Snapshot
-              </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-[20px] border border-white/10 bg-white/8 p-4">
-                  <div className="text-sm text-white/60">已报名学生</div>
-                  <div className="mt-2 text-3xl font-semibold">{adminProgress?.summary.total_registrations || 0}</div>
-                </div>
-                <div className="rounded-[20px] border border-white/10 bg-white/8 p-4">
-                  <div className="text-sm text-white/60">已有报名单位</div>
-                  <div className="mt-2 text-3xl font-semibold">{adminProgress?.summary.registered_units || 0}</div>
-                </div>
-                <div className="rounded-[20px] border border-white/10 bg-white/8 p-4">
-                  <div className="text-sm text-white/60">已有报名学校</div>
-                  <div className="mt-2 text-3xl font-semibold">{adminProgress?.summary.registered_schools || 0}</div>
-                </div>
-              </div>
             </div>
           </div>
         </section>
@@ -323,10 +359,16 @@ const DownloadPage: React.FC = () => {
                 单条查询
               </button>
               <button
+                onClick={() => setDownloadMode('batch')}
+                className={`rounded-full px-4 py-2 text-sm font-semibold ${downloadMode === 'batch' ? 'bg-primary-900 text-white' : 'text-secondary-600'}`}
+              >
+                批量下载
+              </button>
+              <button
                 onClick={() => setDownloadMode('admin')}
                 className={`rounded-full px-4 py-2 text-sm font-semibold ${downloadMode === 'admin' ? 'bg-primary-900 text-white' : 'text-secondary-600'}`}
               >
-                管理员中心
+                管理登录
               </button>
             </div>
 
@@ -383,6 +425,119 @@ const DownloadPage: React.FC = () => {
                   </div>
                 )}
               </div>
+            ) : downloadMode === 'batch' ? (
+              <div className="mt-6 space-y-5">
+                <div className="grid gap-4 lg:grid-cols-[0.84fr_1.16fr]">
+                  <div className="rounded-[24px] border border-white/60 bg-white/78 p-5">
+                    <div className="flex items-center gap-2 text-ink">
+                      {publicBatchUnitType === 'district' ? <Landmark className="h-5 w-5 text-primary-700" /> : <Building2 className="h-5 w-5 text-primary-700" />}
+                      <h3 className="text-xl font-semibold">批量下载范围</h3>
+                    </div>
+
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                      <button
+                        onClick={() => {
+                          setPublicBatchUnitType('district')
+                          setPublicBatchUnitCode('')
+                        }}
+                        className={`rounded-[22px] border p-4 text-left ${publicBatchUnitType === 'district' ? 'border-primary-400 bg-primary-50' : 'border-[#ddd4c7] bg-[#fffaf3]'}`}
+                      >
+                        <div className="font-semibold text-ink">按学区下载</div>
+                        <div className="mt-2 text-sm text-secondary-600">适合学区统一下载本学区准考证</div>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setPublicBatchUnitType('direct_school')
+                          setPublicBatchUnitCode('')
+                        }}
+                        className={`rounded-[22px] border p-4 text-left ${publicBatchUnitType === 'direct_school' ? 'border-primary-400 bg-primary-50' : 'border-[#ddd4c7] bg-[#fffaf3]'}`}
+                      >
+                        <div className="font-semibold text-ink">按直属学校下载</div>
+                        <div className="mt-2 text-sm text-secondary-600">适合直属学校按本校整体导出</div>
+                      </button>
+                    </div>
+
+                    <select
+                      value={publicBatchUnitCode}
+                      onChange={(event) => setPublicBatchUnitCode(event.target.value)}
+                      className="form-input mt-5"
+                    >
+                      <option value="">全部{publicBatchUnitType === 'district' ? '学区' : '直属学校'}</option>
+                      {publicBatchOptions.map((unit) => (
+                        <option key={unit.code} value={unit.code}>
+                          {unit.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <input
+                      value={publicSchoolFilter}
+                      onChange={(event) => setPublicSchoolFilter(event.target.value)}
+                      className="form-input mt-4"
+                      placeholder="按学校名称进一步筛选"
+                    />
+
+                    <button onClick={() => void handlePublicBatchDownload()} className="btn-primary mt-5 w-full justify-center">
+                      <Users className="h-4 w-4" />
+                      下载当前筛选准考证
+                    </button>
+                  </div>
+
+                  <div className="rounded-[24px] border border-white/60 bg-white/78 p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-secondary-500">Preview</p>
+                        <h3 className="mt-2 text-xl font-semibold text-ink">批量下载预览</h3>
+                      </div>
+                      {isLoadingPublicBatch && <Loader className="h-5 w-5 animate-spin text-primary-700" />}
+                    </div>
+
+                    <div className="mt-4 grid gap-4 md:grid-cols-3">
+                      <div className="rounded-[20px] border border-[#e5dccd] bg-[#fffaf3] p-5">
+                        <div className="text-sm text-secondary-600">已加载记录</div>
+                        <div className="mt-2 text-3xl font-semibold text-ink">{allRegistrations.length}</div>
+                      </div>
+                      <div className="rounded-[20px] border border-[#e5dccd] bg-[#fffaf3] p-5">
+                        <div className="text-sm text-secondary-600">当前筛选</div>
+                        <div className="mt-2 text-3xl font-semibold text-ink">{filteredPublicBatchRegistrations.length}</div>
+                      </div>
+                      <div className="rounded-[20px] border border-[#e5dccd] bg-[#fffaf3] p-5">
+                        <div className="text-sm text-secondary-600">下载方式</div>
+                        <div className="mt-2 text-lg font-semibold text-ink">{publicBatchUnitType === 'district' ? '学区' : '直属学校'}</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 table-container">
+                      <table className="table">
+                        <thead className="table-head">
+                          <tr>
+                            <th className="table-header">学生姓名</th>
+                            <th className="table-header">学校</th>
+                            <th className="table-header">归属</th>
+                            <th className="table-header">准考证号</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#ece4d7]">
+                          {filteredPublicBatchRegistrations.slice(0, 10).map((registration) => (
+                            <tr key={registration.ticket_number}>
+                              <td className="table-cell">{registration.student_name}</td>
+                              <td className="table-cell">{registration.school}</td>
+                              <td className="table-cell">{getContestUnitName(registration.district_code)}</td>
+                              <td className="table-cell">{registration.ticket_number}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {filteredPublicBatchRegistrations.length > 10 && (
+                      <p className="mt-3 text-sm text-secondary-500">
+                        当前仅展示前 10 条，实际将下载全部 {filteredPublicBatchRegistrations.length} 份准考证。
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
             ) : (
               <div className="mt-6 space-y-5">
                 {!adminToken ? (
@@ -392,7 +547,7 @@ const DownloadPage: React.FC = () => {
                       <div>
                         <h3 className="text-2xl font-semibold text-ink">管理员登录</h3>
                         <p className="mt-1 text-sm leading-7 text-secondary-600">
-                          登录后可查看学区和学校报名进度，并统一导出准考证与 Excel 报名数据。
+                          仅限授权管理人员使用。
                         </p>
                       </div>
                     </div>
@@ -400,7 +555,12 @@ const DownloadPage: React.FC = () => {
                     <div className="mt-6 grid gap-4 sm:grid-cols-2">
                       <div>
                         <label className="form-label">管理员账号</label>
-                        <input className="form-input" value={adminAccount} onChange={(event) => setAdminAccount(event.target.value)} />
+                        <input
+                          className="form-input"
+                          value={adminAccount}
+                          onChange={(event) => setAdminAccount(event.target.value)}
+                          placeholder="请输入管理员账号"
+                        />
                       </div>
                       <div>
                         <label className="form-label">密码</label>
@@ -410,12 +570,12 @@ const DownloadPage: React.FC = () => {
                           value={adminPassword}
                           onChange={(event) => setAdminPassword(event.target.value)}
                           onKeyDown={(event) => event.key === 'Enter' && void handleAdminLogin()}
+                          placeholder="请输入管理员密码"
                         />
                       </div>
                     </div>
 
-                    <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-sm text-secondary-500">默认管理员账号：admin，默认密码：admin123</p>
+                    <div className="mt-6 flex justify-end">
                       <button onClick={() => void handleAdminLogin()} disabled={isAdminLoading} className="btn-primary">
                         {isAdminLoading ? <Loader className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
                         进入管理员中心
