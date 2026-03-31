@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Search, Download, AlertCircle, Loader, Users, Building2, Landmark, ShieldCheck, LogOut, FileSpreadsheet, BarChart3, Trash2 } from 'lucide-react'
+import { Search, Download, AlertCircle, Loader, Users, Building2, Landmark, ShieldCheck, LogOut, FileSpreadsheet, BarChart3, Trash2, Pencil, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import * as XLSX from 'xlsx'
 import { apiService, AdminProgress, Registration } from '../services/api'
@@ -9,6 +9,7 @@ import { CONTEST_UNITS, RegistrationUnitType, getContestUnitName } from '../data
 const ADMIN_TOKEN_KEY = 'contest_admin_token'
 const ADMIN_RESET_CONFIRM_TEXT = '确认清空报名数据'
 const ADMIN_DELETE_CONFIRM_TEXT = '确认删除选中报名'
+const PHONE_REGEX = /^1[3-9]\d{9}$/
 
 const DownloadPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('')
@@ -35,6 +36,17 @@ const DownloadPage: React.FC = () => {
   const [isResetting, setIsResetting] = useState(false)
   const [selectedAdminIds, setSelectedAdminIds] = useState<number[]>([])
   const [isDeletingAdminRows, setIsDeletingAdminRows] = useState(false)
+  const [editingRegistration, setEditingRegistration] = useState<Registration | null>(null)
+  const [isEditingAsAdmin, setIsEditingAsAdmin] = useState(false)
+  const [editVerifyPhone, setEditVerifyPhone] = useState('')
+  const [editForm, setEditForm] = useState({
+    student_name: '',
+    school: '',
+    teacher_name: '',
+    leader_name: '',
+    leader_phone: '',
+  })
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
 
   useEffect(() => {
     const loadPublicRegistrations = async () => {
@@ -191,6 +203,7 @@ const DownloadPage: React.FC = () => {
     setShowResetPanel(false)
     setResetConfirmText('')
     setSelectedAdminIds([])
+    closeEditModal()
     toast.success('已退出管理员中心')
   }
 
@@ -345,6 +358,98 @@ const DownloadPage: React.FC = () => {
     }
   }
 
+  const openEditModal = (registration: Registration, asAdmin: boolean) => {
+    setEditingRegistration(registration)
+    setIsEditingAsAdmin(asAdmin)
+    setEditVerifyPhone('')
+    setEditForm({
+      student_name: registration.student_name || '',
+      school: registration.school || '',
+      teacher_name: registration.teacher_name || '',
+      leader_name: registration.leader_name || '',
+      leader_phone: registration.leader_phone || '',
+    })
+  }
+
+  const closeEditModal = () => {
+    setEditingRegistration(null)
+    setIsEditingAsAdmin(false)
+    setEditVerifyPhone('')
+    setEditForm({
+      student_name: '',
+      school: '',
+      teacher_name: '',
+      leader_name: '',
+      leader_phone: '',
+    })
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingRegistration) return
+
+    const payload = {
+      student_name: editForm.student_name.trim(),
+      school: editForm.school.trim(),
+      teacher_name: editForm.teacher_name.trim(),
+      leader_name: editForm.leader_name.trim(),
+      leader_phone: editForm.leader_phone.trim(),
+    }
+
+    if (!payload.student_name || !payload.school || !payload.leader_name || !payload.leader_phone) {
+      toast.error('学生姓名、学校、带队教师、带队教师电话不能为空')
+      return
+    }
+    if (!PHONE_REGEX.test(payload.leader_phone)) {
+      toast.error('带队教师电话必须为 11 位手机号')
+      return
+    }
+
+    setIsSavingEdit(true)
+    try {
+      if (isEditingAsAdmin) {
+        if (!adminToken) {
+          toast.error('请先登录管理员账户')
+          return
+        }
+
+        const response = await apiService.adminUpdateRegistration(adminToken, editingRegistration.id, payload)
+        if (!response.success || !response.data) {
+          toast.error(response.message || '更新报名信息失败')
+          return
+        }
+
+        await loadAdminCenter(adminToken)
+        toast.success(response.message || '报名信息已更新')
+        closeEditModal()
+        return
+      }
+
+      const verifyPhone = editVerifyPhone.trim()
+      if (!PHONE_REGEX.test(verifyPhone)) {
+        toast.error('请输入正确的带队教师电话用于校验')
+        return
+      }
+
+      const response = await apiService.updateRegistrationByTicket(
+        editingRegistration.ticket_number,
+        verifyPhone,
+        payload
+      )
+      if (!response.success || !response.data) {
+        toast.error(response.message || '更新报名信息失败')
+        return
+      }
+
+      setSearchResults((current) =>
+        current.map((item) => (item.ticket_number === response.data?.ticket_number ? response.data : item))
+      )
+      toast.success(response.message || '报名信息已更新')
+      closeEditModal()
+    } finally {
+      setIsSavingEdit(false)
+    }
+  }
+
   const toggleAdminSelection = (id: number) => {
     setSelectedAdminIds((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
@@ -433,8 +538,9 @@ const DownloadPage: React.FC = () => {
   }
 
   return (
-    <div className="container-responsive py-8">
-      <div className="space-y-6">
+    <>
+      <div className="container-responsive py-8">
+        <div className="space-y-6">
         <section className="section-shell p-6 sm:p-8">
           <div className="relative z-10">
             <div className="inline-flex rounded-full border border-white/70 bg-white/78 p-1 shadow-[0_10px_35px_rgba(15,23,40,0.08)]">
@@ -496,10 +602,16 @@ const DownloadPage: React.FC = () => {
                                 <p><span className="font-semibold text-ink">带队教师：</span>{registration.leader_name}（{registration.leader_phone}）</p>
                               </div>
                             </div>
-                            <button onClick={() => void downloadTicket(registration)} className="btn-primary">
-                              <Download className="h-4 w-4" />
-                              下载准考证
-                            </button>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                              <button onClick={() => openEditModal(registration, false)} className="btn-secondary">
+                                <Pencil className="h-4 w-4" />
+                                修改信息
+                              </button>
+                              <button onClick={() => void downloadTicket(registration)} className="btn-primary">
+                                <Download className="h-4 w-4" />
+                                下载准考证
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))
@@ -868,14 +980,24 @@ const DownloadPage: React.FC = () => {
                                     <td className="table-cell">{getContestUnitName(registration.district_code)}</td>
                                     <td className="table-cell">{registration.ticket_number}</td>
                                     <td className="table-cell">
-                                      <button
-                                        onClick={() => void handleDeleteSingleAdminRegistration(registration)}
-                                        disabled={isDeletingAdminRows}
-                                        className="inline-flex items-center gap-1 text-sm font-semibold text-[#b4452d] disabled:opacity-50"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                        删除
-                                      </button>
+                                      <div className="flex items-center gap-3">
+                                        <button
+                                          onClick={() => openEditModal(registration, true)}
+                                          disabled={isDeletingAdminRows || isSavingEdit}
+                                          className="inline-flex items-center gap-1 text-sm font-semibold text-primary-800 disabled:opacity-50"
+                                        >
+                                          <Pencil className="h-4 w-4" />
+                                          编辑
+                                        </button>
+                                        <button
+                                          onClick={() => void handleDeleteSingleAdminRegistration(registration)}
+                                          disabled={isDeletingAdminRows || isSavingEdit}
+                                          className="inline-flex items-center gap-1 text-sm font-semibold text-[#b4452d] disabled:opacity-50"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                          删除
+                                        </button>
+                                      </div>
                                     </td>
                                   </tr>
                                 ))}
@@ -969,8 +1091,103 @@ const DownloadPage: React.FC = () => {
             </div>
           </div>
         </section>
+        </div>
       </div>
-    </div>
+      {editingRegistration && (
+      <div className="fixed inset-0 z-[80] flex items-center justify-center px-4 py-8">
+        <div
+          className="absolute inset-0 bg-black/35 backdrop-blur-[2px]"
+          onClick={closeEditModal}
+          role="presentation"
+        />
+        <div className="relative w-full max-w-xl rounded-[28px] border border-white/60 bg-white/92 p-6 shadow-[0_24px_70px_rgba(15,23,40,0.25)]">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-2xl font-semibold text-ink">修改报名信息</h3>
+              <p className="mt-1 text-sm leading-7 text-secondary-600">
+                {isEditingAsAdmin
+                  ? '管理员可直接修改报名信息。'
+                  : '为确保安全，请先输入带队教师电话校验后再保存修改。'}
+              </p>
+            </div>
+            <button
+              onClick={closeEditModal}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-secondary-500 transition hover:bg-[#f4efe6]"
+              aria-label="关闭"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {!isEditingAsAdmin && (
+            <div className="mt-5">
+              <label className="form-label">带队教师电话（校验用）</label>
+              <input
+                value={editVerifyPhone}
+                onChange={(event) => setEditVerifyPhone(event.target.value.trim())}
+                placeholder="请输入原带队教师电话"
+                className="form-input"
+              />
+            </div>
+          )}
+
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="form-label">学生姓名</label>
+              <input
+                value={editForm.student_name}
+                onChange={(event) => setEditForm((current) => ({ ...current, student_name: event.target.value }))}
+                className="form-input"
+              />
+            </div>
+            <div>
+              <label className="form-label">学校</label>
+              <input
+                value={editForm.school}
+                onChange={(event) => setEditForm((current) => ({ ...current, school: event.target.value }))}
+                className="form-input"
+              />
+            </div>
+            <div>
+              <label className="form-label">指导教师</label>
+              <input
+                value={editForm.teacher_name}
+                onChange={(event) => setEditForm((current) => ({ ...current, teacher_name: event.target.value }))}
+                className="form-input"
+              />
+            </div>
+            <div>
+              <label className="form-label">带队教师</label>
+              <input
+                value={editForm.leader_name}
+                onChange={(event) => setEditForm((current) => ({ ...current, leader_name: event.target.value }))}
+                className="form-input"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="form-label">带队教师电话</label>
+              <input
+                value={editForm.leader_phone}
+                onChange={(event) => setEditForm((current) => ({ ...current, leader_phone: event.target.value.trim() }))}
+                className="form-input"
+                placeholder="11 位手机号"
+              />
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <button onClick={closeEditModal} className="btn-secondary">
+              取消
+            </button>
+            <button onClick={() => void handleSaveEdit()} disabled={isSavingEdit} className="btn-primary">
+              {isSavingEdit ? <Loader className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+              保存修改
+            </button>
+          </div>
+        </div>
+      </div>
+      )}
+    </>
   )
 }
 

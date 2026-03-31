@@ -80,7 +80,7 @@ function normalizePath(pathQuery) {
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS')
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,DELETE,PATCH,OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization')
 }
 
@@ -421,6 +421,63 @@ module.exports = async function handler(req, res) {
       })
     }
 
+    if (segments[0] === 'admin' && segments[1] === 'registrations' && segments.length === 3 && req.method === 'PATCH') {
+      const admin = await requireAdmin(sql, req)
+      if (!admin) {
+        return sendJson(res, 401, { success: false, message: '请先登录管理员账户' })
+      }
+
+      const id = Number(segments[2])
+      if (!Number.isInteger(id) || id <= 0) {
+        return sendJson(res, 400, { success: false, message: '报名记录编号无效' })
+      }
+
+      const body = await readJsonBody(req)
+      const existing = await sql`
+        SELECT *
+        FROM registrations
+        WHERE id = ${id}
+        LIMIT 1
+      `
+      const registration = existing[0]
+      if (!registration) {
+        return sendJson(res, 404, { success: false, message: '报名记录不存在' })
+      }
+
+      const nextStudentName = String(body?.student_name ?? registration.student_name).trim()
+      const nextSchool = String(body?.school ?? registration.school).trim()
+      const nextTeacherName = String(body?.teacher_name ?? registration.teacher_name ?? '').trim()
+      const nextLeaderName = String(body?.leader_name ?? registration.leader_name).trim()
+      const nextLeaderPhone = String(body?.leader_phone ?? registration.leader_phone).trim()
+
+      if (!nextStudentName || !nextSchool || !nextLeaderName || !nextLeaderPhone) {
+        return sendJson(res, 400, { success: false, message: '学生姓名、学校、带队教师、带队教师电话不能为空' })
+      }
+      if (!PHONE_REGEX.test(nextLeaderPhone)) {
+        return sendJson(res, 400, { success: false, message: '带队教师电话必须为11位手机号' })
+      }
+
+      await sql`
+        UPDATE registrations
+        SET student_name = ${nextStudentName},
+            school = ${nextSchool},
+            teacher_name = ${nextTeacherName},
+            leader_name = ${nextLeaderName},
+            leader_phone = ${nextLeaderPhone}
+        WHERE id = ${id}
+      `
+
+      const updated = await sql`
+        SELECT r.*, d.name as district_name
+        FROM registrations r
+        LEFT JOIN districts d ON r.district_code = d.code
+        WHERE r.id = ${id}
+        LIMIT 1
+      `
+
+      return sendJson(res, 200, { success: true, message: '报名信息已更新', data: updated[0] })
+    }
+
     if (segments[0] === 'admin' && segments[1] === 'registrations' && segments[2] === 'delete' && req.method === 'POST') {
       const admin = await requireAdmin(sql, req)
       if (!admin) {
@@ -582,6 +639,66 @@ module.exports = async function handler(req, res) {
           results,
         },
       })
+    }
+
+    if (segments[0] === 'registrations' && segments[1] === 'update' && req.method === 'POST') {
+      const body = await readJsonBody(req)
+      const ticketNumber = String(body?.ticket_number || '').trim()
+      const currentLeaderPhone = String(body?.current_leader_phone || '').trim()
+
+      if (!ticketNumber || !currentLeaderPhone) {
+        return sendJson(res, 400, { success: false, message: '请提供准考证号与带队教师电话' })
+      }
+      if (!PHONE_REGEX.test(currentLeaderPhone)) {
+        return sendJson(res, 400, { success: false, message: '带队教师电话必须为11位手机号' })
+      }
+
+      const existing = await sql`
+        SELECT *
+        FROM registrations
+        WHERE ticket_number = ${ticketNumber}
+        LIMIT 1
+      `
+      const registration = existing[0]
+      if (!registration) {
+        return sendJson(res, 404, { success: false, message: '报名记录不存在' })
+      }
+      if (String(registration.leader_phone) !== currentLeaderPhone) {
+        return sendJson(res, 403, { success: false, message: '带队教师电话校验失败，无法修改报名信息' })
+      }
+
+      const nextStudentName = String(body?.student_name ?? registration.student_name).trim()
+      const nextSchool = String(body?.school ?? registration.school).trim()
+      const nextTeacherName = String(body?.teacher_name ?? registration.teacher_name ?? '').trim()
+      const nextLeaderName = String(body?.leader_name ?? registration.leader_name).trim()
+      const nextLeaderPhone = String(body?.leader_phone ?? registration.leader_phone).trim()
+
+      if (!nextStudentName || !nextSchool || !nextLeaderName || !nextLeaderPhone) {
+        return sendJson(res, 400, { success: false, message: '学生姓名、学校、带队教师、带队教师电话不能为空' })
+      }
+      if (!PHONE_REGEX.test(nextLeaderPhone)) {
+        return sendJson(res, 400, { success: false, message: '带队教师电话必须为11位手机号' })
+      }
+
+      await sql`
+        UPDATE registrations
+        SET student_name = ${nextStudentName},
+            school = ${nextSchool},
+            teacher_name = ${nextTeacherName},
+            leader_name = ${nextLeaderName},
+            leader_phone = ${nextLeaderPhone}
+        WHERE id = ${registration.id}
+      `
+
+      const updated = await sql`
+        SELECT r.*, d.name as district_name
+        FROM registrations r
+        LEFT JOIN districts d ON r.district_code = d.code
+        WHERE r.id = ${registration.id}
+        LIMIT 1
+      `
+
+      return sendJson(res, 200, { success: true, message: '报名信息已更新', data: updated[0] })
     }
 
     if (segments[0] === 'registrations' && segments[1] === 'search' && req.method === 'GET') {

@@ -425,6 +425,91 @@ router.get('/admin/registrations', async (req, res) => {
   }
 });
 
+router.patch('/admin/registrations/:id', async (req, res) => {
+  try {
+    const admin = await requireAdmin(req);
+    if (!admin) {
+      return res.status(401).json({
+        success: false,
+        message: '请先登录管理员账户',
+      });
+    }
+
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: '报名记录编号无效',
+      });
+    }
+
+    const existing = await sql`
+      SELECT *
+      FROM registrations
+      WHERE id = ${id}
+      LIMIT 1
+    `;
+    const registration = existing[0];
+
+    if (!registration) {
+      return res.status(404).json({
+        success: false,
+        message: '报名记录不存在',
+      });
+    }
+
+    const nextStudentName = String(req.body.student_name ?? registration.student_name).trim();
+    const nextSchool = String(req.body.school ?? registration.school).trim();
+    const nextTeacherName = String(req.body.teacher_name ?? registration.teacher_name ?? '').trim();
+    const nextLeaderName = String(req.body.leader_name ?? registration.leader_name).trim();
+    const nextLeaderPhone = String(req.body.leader_phone ?? registration.leader_phone).trim();
+
+    if (!nextStudentName || !nextSchool || !nextLeaderName || !nextLeaderPhone) {
+      return res.status(400).json({
+        success: false,
+        message: '学生姓名、学校、带队教师、带队教师电话不能为空',
+      });
+    }
+
+    if (!PHONE_REGEX.test(nextLeaderPhone)) {
+      return res.status(400).json({
+        success: false,
+        message: '带队教师电话必须为11位手机号',
+      });
+    }
+
+    await sql`
+      UPDATE registrations
+      SET student_name = ${nextStudentName},
+          school = ${nextSchool},
+          teacher_name = ${nextTeacherName},
+          leader_name = ${nextLeaderName},
+          leader_phone = ${nextLeaderPhone}
+      WHERE id = ${id}
+    `;
+
+    const updated = await sql`
+      SELECT r.*, d.name as district_name
+      FROM registrations r
+      LEFT JOIN districts d ON r.district_code = d.code
+      WHERE r.id = ${id}
+      LIMIT 1
+    `;
+
+    res.json({
+      success: true,
+      message: '报名信息已更新',
+      data: updated[0],
+    });
+  } catch (error) {
+    console.error('管理员更新报名信息错误:', error);
+    res.status(500).json({
+      success: false,
+      message: '更新报名信息失败',
+    });
+  }
+});
+
 router.delete('/admin/registrations/:id', async (req, res) => {
   try {
     const admin = await requireAdmin(req);
@@ -802,6 +887,103 @@ router.get('/registrations/search', async (req, res) => {
       success: false,
       message: '搜索报名信息失败',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+});
+
+router.post('/registrations/update', [
+  body('ticket_number').notEmpty().withMessage('准考证号不能为空'),
+  body('current_leader_phone').notEmpty().withMessage('带队教师电话不能为空'),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        errors: errors.array(),
+      });
+    }
+
+    const ticketNumber = String(req.body.ticket_number).trim();
+    const currentLeaderPhone = String(req.body.current_leader_phone).trim();
+
+    if (!PHONE_REGEX.test(currentLeaderPhone)) {
+      return res.status(400).json({
+        success: false,
+        message: '带队教师电话必须为11位手机号',
+      });
+    }
+
+    const existing = await sql`
+      SELECT *
+      FROM registrations
+      WHERE ticket_number = ${ticketNumber}
+      LIMIT 1
+    `;
+    const registration = existing[0];
+
+    if (!registration) {
+      return res.status(404).json({
+        success: false,
+        message: '报名记录不存在',
+      });
+    }
+
+    if (String(registration.leader_phone) !== currentLeaderPhone) {
+      return res.status(403).json({
+        success: false,
+        message: '带队教师电话校验失败，无法修改报名信息',
+      });
+    }
+
+    const nextStudentName = String(req.body.student_name ?? registration.student_name).trim();
+    const nextSchool = String(req.body.school ?? registration.school).trim();
+    const nextTeacherName = String(req.body.teacher_name ?? registration.teacher_name ?? '').trim();
+    const nextLeaderName = String(req.body.leader_name ?? registration.leader_name).trim();
+    const nextLeaderPhone = String(req.body.leader_phone ?? registration.leader_phone).trim();
+
+    if (!nextStudentName || !nextSchool || !nextLeaderName || !nextLeaderPhone) {
+      return res.status(400).json({
+        success: false,
+        message: '学生姓名、学校、带队教师、带队教师电话不能为空',
+      });
+    }
+
+    if (!PHONE_REGEX.test(nextLeaderPhone)) {
+      return res.status(400).json({
+        success: false,
+        message: '带队教师电话必须为11位手机号',
+      });
+    }
+
+    await sql`
+      UPDATE registrations
+      SET student_name = ${nextStudentName},
+          school = ${nextSchool},
+          teacher_name = ${nextTeacherName},
+          leader_name = ${nextLeaderName},
+          leader_phone = ${nextLeaderPhone}
+      WHERE id = ${registration.id}
+    `;
+
+    const updated = await sql`
+      SELECT r.*, d.name as district_name
+      FROM registrations r
+      LEFT JOIN districts d ON r.district_code = d.code
+      WHERE r.id = ${registration.id}
+      LIMIT 1
+    `;
+
+    res.json({
+      success: true,
+      message: '报名信息已更新',
+      data: updated[0],
+    });
+  } catch (error) {
+    console.error('更新报名信息错误:', error);
+    res.status(500).json({
+      success: false,
+      message: '更新报名信息失败',
     });
   }
 });

@@ -78,6 +78,14 @@ export interface AdminDeleteResponse {
   deleted: number
 }
 
+export type RegistrationUpdatePayload = {
+  student_name?: string
+  school?: string
+  teacher_name?: string
+  leader_name?: string
+  leader_phone?: string
+}
+
 // 批量报名请求类型
 export interface BatchRegistrationRequest {
   students: Array<{
@@ -271,6 +279,35 @@ class ApiService {
         ids,
         confirm_text: confirmText,
       }),
+    })
+  }
+
+  async updateRegistrationByTicket(
+    ticketNumber: string,
+    currentLeaderPhone: string,
+    payload: RegistrationUpdatePayload
+  ): Promise<ApiResponse<Registration>> {
+    return this.request<Registration>('/contest/registrations/update', {
+      method: 'POST',
+      body: JSON.stringify({
+        ticket_number: ticketNumber,
+        current_leader_phone: currentLeaderPhone,
+        ...payload,
+      }),
+    })
+  }
+
+  async adminUpdateRegistration(
+    token: string,
+    id: number,
+    payload: RegistrationUpdatePayload
+  ): Promise<ApiResponse<Registration>> {
+    return this.request<Registration>(`/contest/admin/registrations/${id}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
     })
   }
 
