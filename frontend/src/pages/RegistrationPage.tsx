@@ -10,6 +10,7 @@ import {
   Landmark,
   Building2,
   Users,
+  HelpCircle,
   ArrowRight,
   ArrowLeft,
   X,
@@ -49,6 +50,7 @@ interface StudentDraft {
 type EntryMode = 'manual' | 'batch'
 const PHONE_REGEX = /^1[3-9]\d{9}$/
 const normalizePhone = (value: string) => value.replace(/\D/g, '').slice(0, 11)
+const GUIDE_STORAGE_PREFIX = 'contest_registration_guide_seen_'
 
 type GuideTargetKey =
   | 'entry-mode'
@@ -189,8 +191,22 @@ const RegistrationPage: React.FC = () => {
   }, [])
 
   useEffect(() => {
-    setGuideActive(true)
-    setGuideStepIndex(0)
+    const setupGuideVisibility = async () => {
+      const contextResponse = await apiService.getClientContext()
+      const clientIp = contextResponse.success && contextResponse.data?.client_ip
+        ? contextResponse.data.client_ip
+        : 'unknown'
+      const guideStorageKey = `${GUIDE_STORAGE_PREFIX}${clientIp}`
+      const hasSeenGuide = window.localStorage.getItem(guideStorageKey)
+
+      if (!hasSeenGuide) {
+        window.localStorage.setItem(guideStorageKey, '1')
+        setGuideStepIndex(0)
+        setGuideActive(true)
+      }
+    }
+
+    void setupGuideVisibility()
   }, [])
 
   useLayoutEffect(() => {
@@ -590,7 +606,7 @@ const RegistrationPage: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="flex flex-col gap-3 sm:items-end">
+                <div className="flex items-center gap-3 sm:justify-end">
                   <div
                     ref={registerGuideTarget('entry-mode')}
                     className={`inline-flex rounded-full border border-white/70 bg-white/78 p-1 shadow-[0_10px_35px_rgba(15,23,40,0.08)] ${getGuideTargetClassName('entry-mode')}`}
@@ -612,6 +628,17 @@ const RegistrationPage: React.FC = () => {
                       Excel 批量导入
                     </button>
                   </div>
+                  <button
+                    onClick={() => {
+                      setGuideStepIndex(0)
+                      setGuideActive(true)
+                    }}
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-primary-200 bg-primary-50 text-primary-800 shadow-[0_10px_28px_rgba(70,111,221,0.10)] transition hover:bg-primary-100"
+                    aria-label="显示新手引导"
+                    title="新手引导"
+                  >
+                    <HelpCircle className="h-5 w-5" />
+                  </button>
                 </div>
               </div>
 

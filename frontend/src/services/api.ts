@@ -70,6 +70,10 @@ export interface AdminResetResponse {
   cleared: number
 }
 
+export interface ClientContext {
+  client_ip: string
+}
+
 // 批量报名请求类型
 export interface BatchRegistrationRequest {
   students: Array<{
@@ -245,6 +249,10 @@ class ApiService {
     if (params.district_code) queryParams.append('district_code', params.district_code)
     if (params.school) queryParams.append('school', params.school)
     return this.request<Registration[]>(`/contest/registrations/recent?${queryParams.toString()}`)
+  }
+
+  async getClientContext(): Promise<ApiResponse<ClientContext>> {
+    return this.request<ClientContext>('/contest/visitor/context')
   }
 
   // 删除报名

@@ -215,6 +215,15 @@ const getClientIp = (req) => {
   return req.ip || req.socket?.remoteAddress || '';
 };
 
+router.get('/visitor/context', async (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      client_ip: getClientIp(req),
+    },
+  });
+});
+
 // 获取所有学区信息
 router.get('/districts', async (req, res) => {
   try {

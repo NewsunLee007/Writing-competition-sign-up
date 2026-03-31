@@ -309,6 +309,15 @@ module.exports = async function handler(req, res) {
       if (segments.length === 1) return sendJson(res, 200, { success: true, data })
     }
 
+    if (segments[0] === 'visitor' && segments[1] === 'context' && req.method === 'GET') {
+      return sendJson(res, 200, {
+        success: true,
+        data: {
+          client_ip: getClientIp(req),
+        },
+      })
+    }
+
     if (segments[0] === 'admin' && segments[1] === 'login' && req.method === 'POST') {
       await ensureAdminTable(sql)
       const body = await readJsonBody(req)
