@@ -8,6 +8,7 @@ import { CONTEST_UNITS, RegistrationUnitType, getContestUnitName } from '../data
 
 const ADMIN_TOKEN_KEY = 'contest_admin_token'
 const ADMIN_RESET_CONFIRM_TEXT = '确认清空报名数据'
+const ADMIN_DELETE_CONFIRM_TEXT = '确认删除选中报名'
 
 const DownloadPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('')
@@ -32,6 +33,8 @@ const DownloadPage: React.FC = () => {
   const [showResetPanel, setShowResetPanel] = useState(false)
   const [resetConfirmText, setResetConfirmText] = useState('')
   const [isResetting, setIsResetting] = useState(false)
+  const [selectedAdminIds, setSelectedAdminIds] = useState<number[]>([])
+  const [isDeletingAdminRows, setIsDeletingAdminRows] = useState(false)
 
   useEffect(() => {
     const loadPublicRegistrations = async () => {
@@ -116,6 +119,13 @@ const DownloadPage: React.FC = () => {
     })
   }, [adminProgress?.units, adminUnitCode, adminUnitType])
 
+  useEffect(() => {
+    setSelectedAdminIds((current) => {
+      const validIds = new Set(adminRegistrations.map((item) => item.id))
+      return current.filter((id) => validIds.has(id))
+    })
+  }, [adminRegistrations])
+
   const loadAdminCenter = async (token: string) => {
     setIsAdminLoading(true)
     try {
@@ -180,6 +190,7 @@ const DownloadPage: React.FC = () => {
     setAdminSchoolFilter('')
     setShowResetPanel(false)
     setResetConfirmText('')
+    setSelectedAdminIds([])
     toast.success('已退出管理员中心')
   }
 
@@ -331,6 +342,93 @@ const DownloadPage: React.FC = () => {
       toast.success(response.message || '报名数据已清空')
     } finally {
       setIsResetting(false)
+    }
+  }
+
+  const toggleAdminSelection = (id: number) => {
+    setSelectedAdminIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    )
+  }
+
+  const toggleSelectAllFilteredAdminRows = () => {
+    const filteredIds = filteredAdminRegistrations.map((item) => item.id)
+    if (!filteredIds.length) return
+
+    setSelectedAdminIds((current) => {
+      const allSelected = filteredIds.every((id) => current.includes(id))
+      if (allSelected) {
+        return current.filter((id) => !filteredIds.includes(id))
+      }
+      return Array.from(new Set([...current, ...filteredIds]))
+    })
+  }
+
+  const handleDeleteSingleAdminRegistration = async (registration: Registration) => {
+    if (!adminToken) {
+      toast.error('请先登录管理员账户')
+      return
+    }
+
+    const confirmed = window.confirm(
+      `确认删除 ${registration.student_name}（${registration.school}）的报名记录吗？此操作不可撤销。`
+    )
+    if (!confirmed) return
+
+    setIsDeletingAdminRows(true)
+    try {
+      const response = await apiService.deleteAdminRegistration(adminToken, registration.id)
+      if (!response.success) {
+        toast.error(response.message || '删除报名记录失败')
+        return
+      }
+
+      setSelectedAdminIds((current) => current.filter((id) => id !== registration.id))
+      await loadAdminCenter(adminToken)
+      toast.success(response.message || '报名记录已删除')
+    } finally {
+      setIsDeletingAdminRows(false)
+    }
+  }
+
+  const handleDeleteSelectedAdminRegistrations = async () => {
+    if (!adminToken) {
+      toast.error('请先登录管理员账户')
+      return
+    }
+
+    if (!selectedAdminIds.length) {
+      toast.error('请先勾选要删除的报名记录')
+      return
+    }
+
+    const confirmed = window.prompt(
+      `将删除 ${selectedAdminIds.length} 条报名记录。请输入“${ADMIN_DELETE_CONFIRM_TEXT}”继续：`
+    )
+    if (confirmed !== ADMIN_DELETE_CONFIRM_TEXT) {
+      if (confirmed !== null) {
+        toast.error('确认口令不正确，已取消删除')
+      }
+      return
+    }
+
+    setIsDeletingAdminRows(true)
+    try {
+      const response = await apiService.deleteAdminRegistrations(
+        adminToken,
+        selectedAdminIds,
+        ADMIN_DELETE_CONFIRM_TEXT
+      )
+      if (!response.success) {
+        toast.error(response.message || '批量删除失败')
+        return
+      }
+
+      setSelectedAdminIds([])
+      await loadAdminCenter(adminToken)
+      toast.success(response.message || '已删除选中报名记录')
+    } finally {
+      setIsDeletingAdminRows(false)
     }
   }
 
@@ -652,6 +750,14 @@ const DownloadPage: React.FC = () => {
                             下载全部报名 Excel
                           </button>
                           <button
+                            onClick={() => void handleDeleteSelectedAdminRegistrations()}
+                            disabled={isDeletingAdminRows || selectedAdminIds.length === 0}
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-[#f0d9d3] bg-[#fff4f1] px-5 py-3 text-sm font-semibold text-[#b4452d] transition hover:bg-[#fde9e3] disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isDeletingAdminRows ? <Loader className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                            删除已选报名（{selectedAdminIds.length}）
+                          </button>
+                          <button
                             onClick={() => setShowResetPanel((current) => !current)}
                             className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-red-200 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-100"
                           >
@@ -715,37 +821,71 @@ const DownloadPage: React.FC = () => {
                         </div>
 
                         <div className="mt-5 rounded-[22px] border border-[#e5dccd] bg-[#fffaf3] p-5">
-                          <div className="flex items-center gap-2 text-ink">
-                            <BarChart3 className="h-5 w-5 text-primary-700" />
-                            <h4 className="text-lg font-semibold">报名数据预览</h4>
+                          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                            <div className="flex items-center gap-2 text-ink">
+                              <BarChart3 className="h-5 w-5 text-primary-700" />
+                              <h4 className="text-lg font-semibold">报名数据管理</h4>
+                            </div>
+                            <label className="inline-flex items-center gap-2 text-sm text-secondary-600">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 rounded border-[#d8cfbf] text-primary-800 focus:ring-primary-300"
+                                checked={
+                                  filteredAdminRegistrations.length > 0 &&
+                                  filteredAdminRegistrations.every((item) => selectedAdminIds.includes(item.id))
+                                }
+                                onChange={toggleSelectAllFilteredAdminRows}
+                              />
+                              全选当前筛选结果
+                            </label>
                           </div>
 
                           <div className="mt-4 table-container">
                             <table className="table">
                               <thead className="table-head">
                                 <tr>
+                                  <th className="table-header w-[60px]">选择</th>
                                   <th className="table-header">学生姓名</th>
                                   <th className="table-header">学校</th>
                                   <th className="table-header">归属</th>
                                   <th className="table-header">准考证号</th>
+                                  <th className="table-header w-[110px]">操作</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-[#ece4d7]">
-                                {filteredAdminRegistrations.slice(0, 8).map((registration) => (
+                                {filteredAdminRegistrations.slice(0, 20).map((registration) => (
                                   <tr key={registration.ticket_number}>
+                                    <td className="table-cell">
+                                      <input
+                                        type="checkbox"
+                                        className="h-4 w-4 rounded border-[#d8cfbf] text-primary-800 focus:ring-primary-300"
+                                        checked={selectedAdminIds.includes(registration.id)}
+                                        onChange={() => toggleAdminSelection(registration.id)}
+                                      />
+                                    </td>
                                     <td className="table-cell">{registration.student_name}</td>
                                     <td className="table-cell">{registration.school}</td>
                                     <td className="table-cell">{getContestUnitName(registration.district_code)}</td>
                                     <td className="table-cell">{registration.ticket_number}</td>
+                                    <td className="table-cell">
+                                      <button
+                                        onClick={() => void handleDeleteSingleAdminRegistration(registration)}
+                                        disabled={isDeletingAdminRows}
+                                        className="inline-flex items-center gap-1 text-sm font-semibold text-[#b4452d] disabled:opacity-50"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                        删除
+                                      </button>
+                                    </td>
                                   </tr>
                                 ))}
                               </tbody>
                             </table>
                           </div>
 
-                          {filteredAdminRegistrations.length > 8 && (
+                          {filteredAdminRegistrations.length > 20 && (
                             <p className="mt-3 text-sm text-secondary-500">
-                              当前仅展示前 8 条，实际导出将包含全部 {filteredAdminRegistrations.length} 条报名数据。
+                              当前仅展示前 20 条；勾选“全选当前筛选结果”可对全部 {filteredAdminRegistrations.length} 条筛选数据执行批量删除。
                             </p>
                           )}
                         </div>

@@ -425,6 +425,116 @@ router.get('/admin/registrations', async (req, res) => {
   }
 });
 
+router.delete('/admin/registrations/:id', async (req, res) => {
+  try {
+    const admin = await requireAdmin(req);
+    if (!admin) {
+      return res.status(401).json({
+        success: false,
+        message: '请先登录管理员账户',
+      });
+    }
+
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: '报名记录编号无效',
+      });
+    }
+
+    const existing = await sql`
+      SELECT id, student_name, school
+      FROM registrations
+      WHERE id = ${id}
+      LIMIT 1
+    `;
+    if (!existing[0]) {
+      return res.status(404).json({
+        success: false,
+        message: '报名记录不存在或已删除',
+      });
+    }
+
+    await sql`DELETE FROM registrations WHERE id = ${id}`;
+
+    res.json({
+      success: true,
+      message: `已删除 ${existing[0].student_name} 的报名记录`,
+      data: {
+        deleted: 1,
+      },
+    });
+  } catch (error) {
+    console.error('管理员删除单条报名数据错误:', error);
+    res.status(500).json({
+      success: false,
+      message: '删除报名记录失败',
+    });
+  }
+});
+
+router.post('/admin/registrations/delete', async (req, res) => {
+  try {
+    const admin = await requireAdmin(req);
+    if (!admin) {
+      return res.status(401).json({
+        success: false,
+        message: '请先登录管理员账户',
+      });
+    }
+
+    const ids = Array.isArray(req.body?.ids)
+      ? req.body.ids.map((item) => Number(item)).filter((item) => Number.isInteger(item) && item > 0)
+      : [];
+    const confirmText = String(req.body?.confirm_text || '').trim();
+
+    if (!ids.length) {
+      return res.status(400).json({
+        success: false,
+        message: '请选择要删除的报名记录',
+      });
+    }
+
+    if (confirmText !== '确认删除选中报名') {
+      return res.status(400).json({
+        success: false,
+        message: '确认口令不正确，请输入“确认删除选中报名”后再执行',
+      });
+    }
+
+    const existing = await sql`
+      SELECT id
+      FROM registrations
+      WHERE id = ANY(${ids})
+    `;
+    const validIds = existing.map((row) => Number(row.id));
+
+    if (!validIds.length) {
+      return res.status(404).json({
+        success: false,
+        message: '所选报名记录不存在或已删除',
+      });
+    }
+
+    await sql`DELETE FROM registrations WHERE id = ANY(${validIds})`;
+
+    res.json({
+      success: true,
+      message: `已删除 ${validIds.length} 条报名记录`,
+      data: {
+        deleted: validIds.length,
+      },
+    });
+  } catch (error) {
+    console.error('管理员批量删除报名数据错误:', error);
+    res.status(500).json({
+      success: false,
+      message: '批量删除报名记录失败',
+    });
+  }
+});
+
 router.post('/admin/registrations/reset', async (req, res) => {
   try {
     const admin = await requireAdmin(req);

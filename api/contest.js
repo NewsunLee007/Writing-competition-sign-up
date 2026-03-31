@@ -392,6 +392,77 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    if (segments[0] === 'admin' && segments[1] === 'registrations' && segments.length === 3 && req.method === 'DELETE') {
+      const admin = await requireAdmin(sql, req)
+      if (!admin) {
+        return sendJson(res, 401, { success: false, message: '请先登录管理员账户' })
+      }
+
+      const id = Number(segments[2])
+      if (!Number.isInteger(id) || id <= 0) {
+        return sendJson(res, 400, { success: false, message: '报名记录编号无效' })
+      }
+
+      const existing = await sql`
+        SELECT id, student_name, school
+        FROM registrations
+        WHERE id = ${id}
+        LIMIT 1
+      `
+      if (!existing[0]) {
+        return sendJson(res, 404, { success: false, message: '报名记录不存在或已删除' })
+      }
+
+      await sql`DELETE FROM registrations WHERE id = ${id}`
+      return sendJson(res, 200, {
+        success: true,
+        message: `已删除 ${existing[0].student_name} 的报名记录`,
+        data: { deleted: 1 },
+      })
+    }
+
+    if (segments[0] === 'admin' && segments[1] === 'registrations' && segments[2] === 'delete' && req.method === 'POST') {
+      const admin = await requireAdmin(sql, req)
+      if (!admin) {
+        return sendJson(res, 401, { success: false, message: '请先登录管理员账户' })
+      }
+
+      const body = await readJsonBody(req)
+      const ids = Array.isArray(body?.ids)
+        ? body.ids.map((item) => Number(item)).filter((item) => Number.isInteger(item) && item > 0)
+        : []
+      const confirmText = String(body?.confirm_text || '').trim()
+
+      if (!ids.length) {
+        return sendJson(res, 400, { success: false, message: '请选择要删除的报名记录' })
+      }
+
+      if (confirmText !== '确认删除选中报名') {
+        return sendJson(res, 400, {
+          success: false,
+          message: '确认口令不正确，请输入“确认删除选中报名”后再执行',
+        })
+      }
+
+      const existing = await sql`
+        SELECT id
+        FROM registrations
+        WHERE id = ANY(${ids})
+      `
+      const validIds = existing.map((row) => Number(row.id))
+
+      if (!validIds.length) {
+        return sendJson(res, 404, { success: false, message: '所选报名记录不存在或已删除' })
+      }
+
+      await sql`DELETE FROM registrations WHERE id = ANY(${validIds})`
+      return sendJson(res, 200, {
+        success: true,
+        message: `已删除 ${validIds.length} 条报名记录`,
+        data: { deleted: validIds.length },
+      })
+    }
+
     if (segments[0] === 'admin' && segments[1] === 'registrations' && segments[2] === 'reset' && req.method === 'POST') {
       const admin = await requireAdmin(sql, req)
       if (!admin) {

@@ -74,6 +74,10 @@ export interface ClientContext {
   client_ip: string
 }
 
+export interface AdminDeleteResponse {
+  deleted: number
+}
+
 // 批量报名请求类型
 export interface BatchRegistrationRequest {
   students: Array<{
@@ -241,6 +245,32 @@ class ApiService {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ confirm_text: confirmText }),
+    })
+  }
+
+  async deleteAdminRegistration(token: string, id: number): Promise<ApiResponse<AdminDeleteResponse>> {
+    return this.request<AdminDeleteResponse>(`/contest/admin/registrations/${id}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+  }
+
+  async deleteAdminRegistrations(
+    token: string,
+    ids: number[],
+    confirmText: string
+  ): Promise<ApiResponse<AdminDeleteResponse>> {
+    return this.request<AdminDeleteResponse>('/contest/admin/registrations/delete', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        ids,
+        confirm_text: confirmText,
+      }),
     })
   }
 
