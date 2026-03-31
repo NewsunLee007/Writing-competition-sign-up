@@ -28,11 +28,11 @@ const Layout: React.FC = () => {
               </button>
 
               <Link to="/" className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-primary-900 shadow-[0_14px_40px_rgba(22,38,79,0.28)]">
+                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl border border-[#d8d0c3] bg-[#f4efe6] shadow-[0_10px_28px_rgba(15,23,40,0.08)]">
                   <img
                     src="/contest-logo.png"
                     alt="瑞安市英语写作大赛"
-                    className="h-full w-full object-cover"
+                    className="h-9 w-9 object-contain"
                   />
                 </div>
                 <div>

@@ -4,7 +4,6 @@ import {
   Trash2,
   Download,
   CheckCircle,
-  AlertCircle,
   Loader,
   Upload,
   FileSpreadsheet,
@@ -24,7 +23,6 @@ import {
 import {
   ImportedStudent,
   getImportSummary,
-  getTemplateOptionsPreview,
   parseBatchImportFile,
 } from '../utils/batchImport'
 import {
@@ -109,7 +107,6 @@ const RegistrationPage: React.FC = () => {
     [manualUnitType, units]
   )
   const selectedManualUnit = manualOptions.find((unit) => unit.code === manualUnitCode)
-  const templatePreview = getTemplateOptionsPreview()
   const importSummary = getImportSummary(uploadedStudents)
 
   const handleManualTypeChange = (nextType: RegistrationUnitType) => {
@@ -342,12 +339,6 @@ const RegistrationPage: React.FC = () => {
     setEntryMode('manual')
   }
 
-  const overviewStats = [
-    { label: '学区名额总量', value: units.filter((item) => item.type === 'district').reduce((sum, item) => sum + item.quota, 0) },
-    { label: '直属学校总量', value: units.filter((item) => item.type === 'direct_school').reduce((sum, item) => sum + item.quota, 0) },
-    { label: '当前导入预览', value: uploadedStudents.length },
-  ]
-
   if (isSuccess) {
     return (
       <div className="container-responsive py-8">
@@ -413,65 +404,22 @@ const RegistrationPage: React.FC = () => {
   return (
     <div className="container-responsive py-8">
       <div className="space-y-6">
-        <div className="panel-grid items-start">
-          <section className="section-shell p-7 sm:p-10">
-            <div className="relative z-10">
-              <h1 className="mt-5 font-serif text-4xl text-ink sm:text-5xl">报名中心</h1>
-              <p className="mt-4 max-w-3xl text-base leading-8 text-secondary-700">
-                Register with clarity，按学区推荐或直属学校两条路径完成录入、导入与准考证下载。
-              </p>
-              <div className="mt-7 grid gap-3 sm:grid-cols-3">
-                {overviewStats.map((item) => (
-                  <div key={item.label} className="rounded-[22px] border border-white/60 bg-white/76 p-4">
-                    <div className="text-xs font-semibold uppercase tracking-[0.24em] text-secondary-500">
-                      {item.label}
-                    </div>
-                    <div className="mt-2 text-3xl font-semibold text-ink">{item.value}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
+        <section className="section-shell p-6 sm:p-8">
+          <div className="relative z-10">
+            <h1 className="font-serif text-4xl text-ink sm:text-5xl">报名中心</h1>
+            <p className="mt-4 max-w-3xl text-base leading-8 text-secondary-700">
+              先确定报名归属，再录入学生信息；同一组学生完成后可继续追加，不必重复返回顶部操作。
+            </p>
+          </div>
+        </section>
 
-          <aside className="section-shell p-6 sm:p-8">
-            <div className="relative z-10 space-y-5">
-              <div>
-                <h2 className="font-serif text-3xl text-ink">填报说明</h2>
-                <p className="mt-3 text-sm leading-8 text-secondary-700">
-                  系统已按活动通知拆分学区与直属学校名额。建议先选择报名归属，再连续录入同一组学生。
-                </p>
-              </div>
-
-              <div className="rounded-[24px] border border-[#e5dccf] bg-[#fffaf2] p-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-secondary-500">模板选项预览</p>
-                <div className="mt-4 grid gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-ink">学区</p>
-                    <p className="mt-2 text-sm leading-7 text-secondary-600">
-                      {templatePreview.districtOptions.join(' · ')}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-ink">直属学校</p>
-                    <p className="mt-2 text-sm leading-7 text-secondary-600">
-                      {templatePreview.directSchoolOptions.join(' · ')}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </aside>
-        </div>
-
-        <div className="panel-grid items-start">
-          <section className="section-shell p-6 sm:p-8">
+        <section className="section-shell p-6 sm:p-8">
+          <div className="relative z-10">
             <div className="relative z-10">
               <div className="flex flex-col gap-4 border-b border-[#ded5c6] pb-6 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.26em] text-secondary-500">
-                    Input Modes
-                  </div>
-                  <h2 className="mt-2 font-serif text-3xl text-ink">录入方式</h2>
+                  <h2 className="font-serif text-3xl text-ink">开始录入</h2>
+                  <p className="mt-2 text-sm leading-7 text-secondary-600">按步骤完成：选择方式 → 选择归属 → 填写学生 → 提交本组报名。</p>
                 </div>
 
                 <div className="inline-flex rounded-full border border-white/70 bg-white/78 p-1 shadow-[0_10px_35px_rgba(15,23,40,0.08)]">
@@ -496,23 +444,22 @@ const RegistrationPage: React.FC = () => {
 
               {entryMode === 'manual' ? (
                 <div className="mt-6 space-y-6">
-                  <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+                  <div className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
                     <div className="rounded-[24px] border border-white/60 bg-white/78 p-5">
-                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-secondary-500">
-                        报名类别
-                      </p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-secondary-500">步骤 1</p>
+                      <h3 className="mt-2 text-xl font-semibold text-ink">选择报名类别</h3>
                       <div className="mt-4 grid gap-3 sm:grid-cols-2">
                         {[
                           {
                             type: 'district' as const,
                             title: '学区推荐',
-                            desc: '由各学区统一推荐，学校名称手动填写',
+                            desc: '学区统一推荐，学校名称可选或手动填写',
                             icon: Landmark,
                           },
                           {
                             type: 'direct_school' as const,
                             title: '直属学校',
-                            desc: '直接按学校名额报名，学校名称自动锁定',
+                            desc: '按学校固定名额报名，学校名称自动带出',
                             icon: Building2,
                           },
                         ].map((item) => (
@@ -521,7 +468,7 @@ const RegistrationPage: React.FC = () => {
                             onClick={() => handleManualTypeChange(item.type)}
                             className={`rounded-[24px] border p-5 text-left transition-all ${
                               manualUnitType === item.type
-                                ? 'border-primary-400 bg-primary-50 shadow-[0_18px_50px_rgba(70,111,221,0.12)]'
+                                ? 'border-primary-400 bg-primary-50 shadow-[0_14px_40px_rgba(70,111,221,0.12)]'
                                 : 'border-[#ddd4c7] bg-[#fffaf3]'
                             }`}
                           >
@@ -536,17 +483,11 @@ const RegistrationPage: React.FC = () => {
                     <div className="rounded-[24px] border border-white/60 bg-white/78 p-5">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-secondary-500">
-                            归属选择
-                          </p>
-                          <h3 className="mt-2 text-xl font-semibold text-ink">
-                            请选择 {manualUnitType === 'district' ? '学区' : '直属学校'}
-                          </h3>
+                          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-secondary-500">步骤 2</p>
+                          <h3 className="mt-2 text-xl font-semibold text-ink">选择归属</h3>
                         </div>
                         {selectedManualUnit && (
-                          <div className="stat-chip">
-                            剩余 {selectedManualUnit.remainingQuota} / 总名额 {selectedManualUnit.quota}
-                          </div>
+                          <div className="stat-chip">剩余 {selectedManualUnit.remainingQuota} / 总名额 {selectedManualUnit.quota}</div>
                         )}
                       </div>
 
@@ -564,36 +505,23 @@ const RegistrationPage: React.FC = () => {
                       </select>
 
                       {selectedManualUnit && (
-                        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                          <div className="rounded-[20px] border border-[#e0d6c8] bg-[#fffaf2] p-4">
-                            <p className="text-xs uppercase tracking-[0.2em] text-secondary-500">归属</p>
-                            <p className="mt-2 font-semibold text-ink">{selectedManualUnit.displayName}</p>
-                          </div>
-                          <div className="rounded-[20px] border border-[#e0d6c8] bg-[#fffaf2] p-4">
-                            <p className="text-xs uppercase tracking-[0.2em] text-secondary-500">已报名</p>
-                            <p className="mt-2 font-semibold text-ink">{selectedManualUnit.registeredCount}</p>
-                          </div>
-                          <div className="rounded-[20px] border border-[#e0d6c8] bg-[#fffaf2] p-4">
-                            <p className="text-xs uppercase tracking-[0.2em] text-secondary-500">名额上限</p>
-                            <p className="mt-2 font-semibold text-ink">{selectedManualUnit.quota}</p>
-                          </div>
+                        <div className="mt-5 rounded-[20px] border border-[#e0d6c8] bg-[#fffaf2] p-4 text-sm leading-7 text-secondary-700">
+                          当前录入归属为 <span className="font-semibold text-ink">{selectedManualUnit.displayName}</span>，
+                          已报名 {selectedManualUnit.registeredCount} 人，剩余 {selectedManualUnit.remainingQuota} 人。
                         </div>
                       )}
                     </div>
                   </div>
 
                   <div className="rounded-[28px] border border-white/60 bg-white/78 p-5">
-                    <div className="flex flex-col gap-4 border-b border-[#ece4d7] pb-5 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="border-b border-[#ece4d7] pb-5">
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-secondary-500">
-                          Student Entries
-                        </p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-secondary-500">步骤 3</p>
                         <h3 className="mt-2 text-2xl font-semibold text-ink">学生信息录入</h3>
+                        <p className="mt-2 text-sm leading-7 text-secondary-600">
+                          录完当前学生后，可直接在下方继续添加下一位学生。
+                        </p>
                       </div>
-                      <button onClick={addManualStudent} className="btn-primary">
-                        <Plus className="h-4 w-4" />
-                        添加学生
-                      </button>
                     </div>
 
                     <div className="mt-6 space-y-5">
@@ -709,6 +637,13 @@ const RegistrationPage: React.FC = () => {
                         </div>
                       ))}
                     </div>
+
+                    <div className="mt-6">
+                      <button onClick={addManualStudent} className="btn-secondary">
+                        <Plus className="h-4 w-4" />
+                        添加学生
+                      </button>
+                    </div>
                   </div>
 
                   <button
@@ -821,53 +756,8 @@ const RegistrationPage: React.FC = () => {
                 </div>
               )}
             </div>
-          </section>
-
-          <aside className="section-shell p-6 sm:p-8">
-            <div className="relative z-10 space-y-5">
-              <div className="flex items-center gap-3">
-                <AlertCircle className="h-5 w-5 text-primary-700" />
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-secondary-500">
-                    操作说明
-                  </p>
-                  <h3 className="text-2xl font-semibold text-ink">报名注意事项</h3>
-                </div>
-              </div>
-
-              <div className="rounded-[24px] border border-[#e5dccf] bg-[#fffaf2] p-5 text-sm leading-8 text-secondary-700">
-                <p>• 报名截止日期：4 月 3 日</p>
-                <p>• 活动时间：4 月 12 日（星期日）8:50 报到，9:00 开始</p>
-                <p>• 活动地点：瑞安市毓蒙中学</p>
-                <p>• 指导教师需逐位学生对应填写，不可遗漏</p>
-                <p>• 直属学校报名时，“学校”字段自动带出学校名称</p>
-              </div>
-
-              <div className="rounded-[24px] border border-[#e5dccf] bg-white/82 p-5">
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-bronze" />
-                  <p className="text-sm font-semibold text-ink">当前名额概览</p>
-                </div>
-                <div className="mt-4 grid gap-3">
-                  {units.slice(0, 6).map((unit) => (
-                    <div key={unit.code} className="flex items-center justify-between rounded-2xl border border-[#eee4d7] bg-[#fffaf3] px-4 py-3">
-                      <div>
-                        <p className="font-semibold text-ink">{unit.displayName}</p>
-                        <p className="text-xs uppercase tracking-[0.22em] text-secondary-500">
-                          {unit.type === 'district' ? '学区推荐' : '直属学校'}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-semibold text-ink">{unit.remainingQuota} / {unit.quota}</p>
-                        <p className="text-xs text-secondary-500">剩余 / 总额</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </aside>
-        </div>
+          </div>
+        </section>
       </div>
     </div>
   )
