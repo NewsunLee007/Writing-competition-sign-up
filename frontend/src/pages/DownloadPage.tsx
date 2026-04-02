@@ -50,6 +50,8 @@ const DownloadPage: React.FC = () => {
     leader_phone: '',
   })
   const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [quotaDrafts, setQuotaDrafts] = useState<Record<string, string>>({})
+  const [updatingQuotaCode, setUpdatingQuotaCode] = useState('')
 
   useEffect(() => {
     const loadPublicRegistrations = async () => {
@@ -140,6 +142,20 @@ const DownloadPage: React.FC = () => {
       return current.filter((id) => validIds.has(id))
     })
   }, [adminRegistrations])
+
+  useEffect(() => {
+    const units = adminProgress?.units
+    if (!units) return
+    setQuotaDrafts((current) => {
+      const next: Record<string, string> = { ...current }
+      units.forEach((unit) => {
+        if (next[unit.code] == null) {
+          next[unit.code] = String(unit.quota)
+        }
+      })
+      return next
+    })
+  }, [adminProgress?.units])
 
   const loadAdminCenter = async (token: string) => {
     setIsAdminLoading(true)
@@ -569,6 +585,35 @@ const DownloadPage: React.FC = () => {
       toast.success(response.message || '已删除选中报名记录')
     } finally {
       setIsDeletingAdminRows(false)
+    }
+  }
+
+  const handleUpdateQuota = async (code: string) => {
+    if (!adminToken) {
+      toast.error('请先登录管理员账户')
+      return
+    }
+
+    const raw = quotaDrafts[code]
+    const quota = Number(raw)
+
+    if (!Number.isFinite(quota) || !Number.isInteger(quota) || quota < 0 || quota > 999) {
+      toast.error('名额必须为 0-999 的整数')
+      return
+    }
+
+    setUpdatingQuotaCode(code)
+    try {
+      const response = await apiService.adminUpdateDistrictQuota(adminToken, code, quota)
+      if (!response.success) {
+        toast.error(response.message || '更新名额失败')
+        return
+      }
+
+      await loadAdminCenter(adminToken)
+      toast.success(response.message || '名额已更新')
+    } finally {
+      setUpdatingQuotaCode('')
     }
   }
 
@@ -1108,6 +1153,7 @@ const DownloadPage: React.FC = () => {
                                 <th className="table-header">已报</th>
                                 <th className="table-header">剩余</th>
                                 <th className="table-header">学校数</th>
+                                <th className="table-header">名额设置</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-[#ece4d7]">
@@ -1120,6 +1166,31 @@ const DownloadPage: React.FC = () => {
                                   <td className="table-cell">{item.registered_count}</td>
                                   <td className="table-cell">{item.remaining_quota}</td>
                                   <td className="table-cell">{item.school_count}</td>
+                                  <td className="table-cell">
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        max={999}
+                                        value={quotaDrafts[item.code] ?? String(item.quota)}
+                                        onChange={(event) =>
+                                          setQuotaDrafts((current) => ({ ...current, [item.code]: event.target.value }))
+                                        }
+                                        className="h-10 w-[96px] rounded-[14px] border border-[#d8cfbf] bg-white px-3 text-sm font-semibold text-ink shadow-sm focus:border-primary-300 focus:outline-none focus:ring-2 focus:ring-primary-200"
+                                      />
+                                      <button
+                                        onClick={() => void handleUpdateQuota(item.code)}
+                                        disabled={updatingQuotaCode === item.code || isAdminLoading}
+                                        className="inline-flex h-10 items-center justify-center rounded-[14px] bg-primary-900 px-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                                      >
+                                        {updatingQuotaCode === item.code ? (
+                                          <Loader className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                          '更新'
+                                        )}
+                                      </button>
+                                    </div>
+                                  </td>
                                 </tr>
                               ))}
                             </tbody>

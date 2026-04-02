@@ -85,7 +85,7 @@ function setCors(res) {
 }
 
 function applyQuotaOverride(code, quota) {
-  return UNIT_META[String(code)]?.quota ?? quota
+  return quota
 }
 
 function getUnitName(code, fallback) {
@@ -390,6 +390,56 @@ module.exports = async function handler(req, res) {
 
         return sendJson(res, 200, { success: true, data: result })
       }
+    }
+
+    if (segments[0] === 'admin' && segments[1] === 'districts' && segments.length === 3 && req.method === 'PATCH') {
+      const admin = await requireAdmin(sql, req)
+      if (!admin) {
+        return sendJson(res, 401, { success: false, message: '请先登录管理员账户' })
+      }
+
+      const code = String(segments[2] || '').trim()
+      const body = await readJsonBody(req)
+      const quota = Number(body?.quota)
+
+      if (!code) {
+        return sendJson(res, 400, { success: false, message: '归属代码不能为空' })
+      }
+      if (!Number.isFinite(quota) || !Number.isInteger(quota) || quota < 0 || quota > 999) {
+        return sendJson(res, 400, { success: false, message: '名额必须为 0-999 的整数' })
+      }
+
+      const existing = await sql`
+        SELECT code, name, quota
+        FROM districts
+        WHERE code = ${code}
+        LIMIT 1
+      `
+      if (!existing[0]) {
+        return sendJson(res, 404, { success: false, message: '归属代码不存在' })
+      }
+
+      await sql`
+        UPDATE districts
+        SET quota = ${quota}
+        WHERE code = ${code}
+      `
+      const updated = await sql`
+        SELECT code, name, quota
+        FROM districts
+        WHERE code = ${code}
+        LIMIT 1
+      `
+
+      return sendJson(res, 200, {
+        success: true,
+        message: '名额已更新',
+        data: {
+          code: String(updated[0].code),
+          name: getUnitName(updated[0].code, updated[0].name),
+          quota: Number(updated[0].quota),
+        },
+      })
     }
 
     if (segments[0] === 'admin' && segments[1] === 'registrations' && segments.length === 3 && req.method === 'DELETE') {

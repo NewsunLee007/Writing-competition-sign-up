@@ -47,7 +47,7 @@ const EXAM_ROOM_MAP = {
 const PHONE_REGEX = /^1[3-9]\d{9}$/;
 
 const applyQuotaOverride = (code, quota) => {
-  return UNIT_META[String(code)]?.quota ?? quota;
+  return quota;
 };
 
 const getUnitName = (code, fallback) => {
@@ -381,6 +381,78 @@ router.get('/admin/progress', async (req, res) => {
     res.status(500).json({
       success: false,
       message: '获取管理员进度失败',
+    });
+  }
+});
+
+router.patch('/admin/districts/:code', async (req, res) => {
+  try {
+    const admin = await requireAdmin(req);
+    if (!admin) {
+      return res.status(401).json({
+        success: false,
+        message: '请先登录管理员账户',
+      });
+    }
+
+    const code = String(req.params.code || '').trim();
+    const quotaRaw = req.body?.quota;
+    const quota = Number(quotaRaw);
+
+    if (!code) {
+      return res.status(400).json({
+        success: false,
+        message: '归属代码不能为空',
+      });
+    }
+
+    if (!Number.isFinite(quota) || !Number.isInteger(quota) || quota < 0 || quota > 999) {
+      return res.status(400).json({
+        success: false,
+        message: '名额必须为 0-999 的整数',
+      });
+    }
+
+    const existing = await sql`
+      SELECT code, name, quota
+      FROM districts
+      WHERE code = ${code}
+      LIMIT 1
+    `;
+    if (!existing[0]) {
+      return res.status(404).json({
+        success: false,
+        message: '归属代码不存在',
+      });
+    }
+
+    await sql`
+      UPDATE districts
+      SET quota = ${quota}
+      WHERE code = ${code}
+    `;
+
+    const updated = await sql`
+      SELECT code, name, quota
+      FROM districts
+      WHERE code = ${code}
+      LIMIT 1
+    `;
+
+    res.json({
+      success: true,
+      message: '名额已更新',
+      data: {
+        code: String(updated[0].code),
+        name: getUnitName(updated[0].code, updated[0].name),
+        quota: Number(updated[0].quota),
+      },
+    });
+  } catch (error) {
+    console.error('管理员更新名额错误:', error);
+    res.status(500).json({
+      success: false,
+      message: '更新名额失败',
     });
   }
 });

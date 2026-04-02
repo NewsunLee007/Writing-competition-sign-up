@@ -19,6 +19,12 @@ export interface District {
   remaining_quota?: number
 }
 
+export interface AdminQuotaUpdateResponse {
+  code: string
+  name: string
+  quota: number
+}
+
 // 报名信息类型
 export interface Registration {
   id: number
@@ -224,6 +230,20 @@ class ApiService {
       headers: {
         Authorization: `Bearer ${token}`,
       },
+    })
+  }
+
+  async adminUpdateDistrictQuota(
+    token: string,
+    code: string,
+    quota: number
+  ): Promise<ApiResponse<AdminQuotaUpdateResponse>> {
+    return this.request<AdminQuotaUpdateResponse>(`/contest/admin/districts/${encodeURIComponent(code)}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ quota }),
     })
   }
 
