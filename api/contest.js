@@ -759,6 +759,9 @@ module.exports = async function handler(req, res) {
         return sendJson(res, 400, { success: false, message: '请提供查询条件' })
       }
 
+      // Ensure columns exist before querying
+      await ensureRegistrationColumns(sql);
+
       // using neon sql syntax
       let results = await sql`
         SELECT r.ticket_number, r.student_name, r.school, r.exam_room, d.name as district_name
