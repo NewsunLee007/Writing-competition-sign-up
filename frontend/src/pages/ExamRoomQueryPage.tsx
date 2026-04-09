@@ -5,6 +5,8 @@ import * as XLSX from 'xlsx'
 import { apiService } from '../services/api'
 import { District } from '../services/api'
 
+import { CONTEST_UNITS } from '../data/contestOptions'
+
 interface ExamRoomData {
   student_name: string
   ticket_number: string
@@ -20,6 +22,7 @@ const ExamRoomQueryPage: React.FC = () => {
   
   const [schoolName, setSchoolName] = useState('')
   const [districtCode, setDistrictCode] = useState('')
+  const [directSchoolCode, setDirectSchoolCode] = useState('')
   
   const [isLoading, setIsLoading] = useState(false)
   const [results, setResults] = useState<ExamRoomData[]>([])
@@ -56,8 +59,8 @@ const ExamRoomQueryPage: React.FC = () => {
         return
       }
     } else if (queryType === 'school') {
-      if (!schoolName.trim()) {
-        toast.error('请输入学校名称')
+      if (!schoolName.trim() && !directSchoolCode) {
+        toast.error('请输入学校名称或选择直属学校')
         return
       }
     }
@@ -67,11 +70,13 @@ const ExamRoomQueryPage: React.FC = () => {
     setHasQueried(true)
     
     try {
+      const isDirectSchoolQuery = queryType === 'school' && directSchoolCode !== ''
+      
       const response = await apiService.queryExamRoom({
         ticket_number: queryType === 'student' ? ticketNumber.trim() : undefined,
         student_name: queryType === 'student' ? studentName.trim() : undefined,
-        school: queryType === 'school' ? schoolName.trim() : undefined,
-        district_code: queryType === 'district' ? districtCode : undefined
+        school: queryType === 'school' && !isDirectSchoolQuery ? schoolName.trim() : undefined,
+        district_code: queryType === 'district' ? districtCode : isDirectSchoolQuery ? directSchoolCode : undefined
       })
       
       if (response.success && response.data) {
@@ -130,7 +135,13 @@ const ExamRoomQueryPage: React.FC = () => {
     let prefix = '考场信息'
     if (queryType === 'student') prefix = `${studentName.trim()}_考场信息`
     else if (queryType === 'district') prefix = `${districts.find(d => d.code === districtCode)?.name || '学区'}_考场信息`
-    else if (queryType === 'school') prefix = `${schoolName.trim()}_考场信息`
+    else if (queryType === 'school') {
+      if (directSchoolCode) {
+        prefix = `${CONTEST_UNITS.find(u => u.code === directSchoolCode)?.name || '直属学校'}_考场信息`
+      } else {
+        prefix = `${schoolName.trim()}_考场信息`
+      }
+    }
     
     XLSX.writeFile(workbook, `${prefix}_${dateStr}.xlsx`)
     toast.success('导出成功')
@@ -142,6 +153,7 @@ const ExamRoomQueryPage: React.FC = () => {
     setStudentName('')
     setSchoolName('')
     setDistrictCode('')
+    setDirectSchoolCode('')
   }
 
   return (
@@ -162,7 +174,12 @@ const ExamRoomQueryPage: React.FC = () => {
                 <div className="flex justify-center space-x-2 sm:space-x-4 mb-6">
                   <button
                     type="button"
-                    onClick={() => setQueryType('student')}
+                    onClick={() => {
+                      setQueryType('student')
+                      setDistrictCode('')
+                      setSchoolName('')
+                      setDirectSchoolCode('')
+                    }}
                     className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                       queryType === 'student' 
                         ? 'bg-primary-600 text-white shadow-sm' 
@@ -173,7 +190,11 @@ const ExamRoomQueryPage: React.FC = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setQueryType('district')}
+                    onClick={() => {
+                      setQueryType('district')
+                      setSchoolName('')
+                      setDirectSchoolCode('')
+                    }}
                     className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                       queryType === 'district' 
                         ? 'bg-primary-600 text-white shadow-sm' 
@@ -184,14 +205,17 @@ const ExamRoomQueryPage: React.FC = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setQueryType('school')}
+                    onClick={() => {
+                      setQueryType('school')
+                      setDistrictCode('')
+                    }}
                     className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                       queryType === 'school' 
                         ? 'bg-primary-600 text-white shadow-sm' 
                         : 'bg-secondary-100 text-secondary-600 hover:bg-secondary-200'
                     }`}
                   >
-                    按学校查询
+                    按直属学校/学校查询
                   </button>
                 </div>
 
@@ -247,7 +271,11 @@ const ExamRoomQueryPage: React.FC = () => {
                             id="districtCode"
                             className="form-input"
                             value={districtCode}
-                            onChange={(e) => setDistrictCode(e.target.value)}
+                            onChange={(e) => {
+                              setDistrictCode(e.target.value)
+                              setDirectSchoolCode('')
+                              setSchoolName('')
+                            }}
                             required
                           >
                             <option value="">-- 请选择学区 --</option>
@@ -258,25 +286,54 @@ const ExamRoomQueryPage: React.FC = () => {
                         </div>
                       </div>
                     ) : (
-                      <div className="form-group">
-                        <label htmlFor="schoolName" className="form-label">
-                          学校名称 <span className="text-red-500">*</span>
-                        </label>
-                        <div className="relative">
-                          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                            <Building className="h-5 w-5 text-secondary-400" />
+                      <>
+                        <div className="form-group">
+                          <label htmlFor="directSchoolCode" className="form-label">
+                            选择直属学校 (可选)
+                          </label>
+                          <div className="relative">
+                            <select
+                              id="directSchoolCode"
+                              className="form-input"
+                              value={directSchoolCode}
+                              onChange={(e) => {
+                                setDirectSchoolCode(e.target.value)
+                                setDistrictCode('')
+                                if (e.target.value) {
+                                  setSchoolName('')
+                                }
+                              }}
+                            >
+                              <option value="">-- 请选择直属学校 --</option>
+                              {CONTEST_UNITS.filter(u => u.type === 'direct_school').map(u => (
+                                <option key={u.code} value={u.code}>{u.name}</option>
+                              ))}
+                            </select>
                           </div>
-                          <input
-                            type="text"
-                            id="schoolName"
-                            className="form-input pl-10"
-                            placeholder="请输入学校名称（支持模糊搜索）"
-                            value={schoolName}
-                            onChange={(e) => setSchoolName(e.target.value)}
-                            required
-                          />
                         </div>
-                      </div>
+                        
+                        {!directSchoolCode && (
+                          <div className="form-group">
+                            <label htmlFor="schoolName" className="form-label">
+                              或者输入学校名称 <span className="text-red-500">*</span>
+                            </label>
+                            <div className="relative">
+                              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                <Building className="h-5 w-5 text-secondary-400" />
+                              </div>
+                              <input
+                                type="text"
+                                id="schoolName"
+                                className="form-input pl-10"
+                                placeholder="请输入学校名称（支持模糊搜索）"
+                                value={schoolName}
+                                onChange={(e) => setSchoolName(e.target.value)}
+                                required={!directSchoolCode}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
 
