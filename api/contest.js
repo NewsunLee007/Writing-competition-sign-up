@@ -793,10 +793,10 @@ module.exports = async function handler(req, res) {
         LEFT JOIN districts d ON r.district_code = d.code
       `;
 
-      if (ticket_number) results = results.filter(r => r.ticket_number === String(ticket_number));
-      if (student_name) results = results.filter(r => r.student_name === String(student_name));
+      if (ticket_number) results = results.filter(r => String(r.ticket_number) === String(ticket_number));
+      if (student_name) results = results.filter(r => String(r.student_name) === String(student_name));
       if (school) results = results.filter(r => r.school && String(r.school).includes(String(school)));
-      if (district_code) results = results.filter(r => r.district_code === String(district_code));
+      if (district_code) results = results.filter(r => String(r.district_code) === String(district_code));
 
       if (results.length === 0) {
         return sendJson(res, 404, { success: false, message: '未找到匹配的考场信息' })

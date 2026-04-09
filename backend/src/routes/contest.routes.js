@@ -903,6 +903,78 @@ router.get('/registrations/recent', async (req, res) => {
   }
 });
 
+router.get('/registrations/exam-room', async (req, res) => {
+  try {
+    const { ticket_number, student_name, school, district_code } = req.query;
+
+    if (!student_name && !school && !district_code) {
+      return res.status(400).json({
+        success: false,
+        message: '请提供查询条件',
+      });
+    }
+
+    let queryStr = `
+      SELECT r.ticket_number, r.student_name, r.school, r.exam_room, d.name as district_name
+      FROM registrations r
+      LEFT JOIN districts d ON r.district_code = d.code
+      WHERE 1=1
+    `;
+    const queryParams = [];
+
+    if (ticket_number) {
+      queryParams.push(String(ticket_number));
+      queryStr += ` AND r.ticket_number = $${queryParams.length}`;
+    }
+    if (student_name) {
+      queryParams.push(String(student_name));
+      queryStr += ` AND r.student_name = $${queryParams.length}`;
+    }
+    if (school) {
+      queryParams.push(`%${String(school)}%`);
+      queryStr += ` AND r.school LIKE $${queryParams.length}`;
+    }
+    if (district_code) {
+      queryParams.push(String(district_code));
+      queryStr += ` AND r.district_code = $${queryParams.length}`;
+    }
+    
+    queryStr += ` ORDER BY r.exam_room ASC, r.ticket_number ASC`;
+
+    // using neon sql syntax
+    let results = await sql`
+      SELECT r.ticket_number, r.student_name, r.school, r.exam_room, d.name as district_name
+      FROM registrations r
+      LEFT JOIN districts d ON r.district_code = d.code
+    `;
+
+    if (ticket_number) results = results.filter(r => String(r.ticket_number) === String(ticket_number));
+    if (student_name) results = results.filter(r => String(r.student_name) === String(student_name));
+    if (school) results = results.filter(r => r.school && String(r.school).includes(String(school)));
+    if (district_code) results = results.filter(r => String(r.district_code) === String(district_code));
+
+    if (results.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: '未找到匹配的考场信息',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: results,
+    });
+  } catch (error) {
+    console.error('查询考场信息错误:', error.message);
+    console.error('错误堆栈:', error.stack);
+    res.status(500).json({
+      success: false,
+      message: '查询考场信息失败',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+});
+
 // 搜索报名信息（支持准考证号、姓名、学校搜索）
 router.get('/registrations/search', async (req, res) => {
   try {
