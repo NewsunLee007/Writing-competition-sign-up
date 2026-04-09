@@ -768,6 +768,8 @@ module.exports = async function handler(req, res) {
         FROM registrations r
         LEFT JOIN districts d ON r.district_code = d.code
       `
+      
+      const total_rows = results.length;
 
       if (ticket_number) results = results.filter(r => String(r.ticket_number) === String(ticket_number))
       // Relaxed exact match for student_name to allow spaces/trim issues and partial matches
@@ -776,7 +778,11 @@ module.exports = async function handler(req, res) {
       if (district_code) results = results.filter(r => String(r.district_code) === String(district_code))
 
       if (results.length === 0) {
-        return sendJson(res, 404, { success: false, message: '未找到匹配的考场信息' })
+        return sendJson(res, 404, { 
+          success: false, 
+          message: '未找到匹配的考场信息', 
+          debug: { student_name, school, district_code, ticket_number, total_rows } 
+        })
       }
       
       return sendJson(res, 200, { success: true, data: results })
