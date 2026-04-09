@@ -349,7 +349,7 @@ class ApiService {
     if (params.student_name) queryParams.append('student_name', params.student_name)
     if (params.school) queryParams.append('school', params.school)
     if (params.district_code) queryParams.append('district_code', params.district_code)
-    return this.request<any>(`/contest/registrations/exam-room?${queryParams.toString()}`)
+    return this.request<any>(`/contest?path=registrations/exam-room&${queryParams.toString()}`)
   }
 
   // 删除报名
