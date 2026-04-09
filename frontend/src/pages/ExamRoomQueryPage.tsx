@@ -279,7 +279,7 @@ const ExamRoomQueryPage: React.FC = () => {
                             required
                           >
                             <option value="">-- 请选择学区 --</option>
-                            {districts.map(d => (
+                            {districts.filter(d => !CONTEST_UNITS.find(u => u.code === d.code && u.type === 'direct_school')).map(d => (
                               <option key={d.code} value={d.code}>{d.name}</option>
                             ))}
                           </select>
