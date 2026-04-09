@@ -75,7 +75,7 @@ async function readJsonBody(req) {
 function normalizePath(pathQuery) {
   if (!pathQuery) return ''
   if (Array.isArray(pathQuery)) return pathQuery.join('/')
-  return String(pathQuery).replace(/^\/+/, '') // Remove leading slashes to prevent empty segments
+  return String(pathQuery).replace(/^\/+/, '').replace(/,+/g, '/') // Remove leading slashes to prevent empty segments
 }
 
 function getSegmentsFromReq(req) {
@@ -285,7 +285,7 @@ module.exports = async function handler(req, res) {
 
   try {
     if (segments.length === 0) {
-      return sendJson(res, 200, { success: true, message: 'Writing Contest API', reqUrl: req.url, segments })
+      return sendJson(res, 200, { success: true, message: 'Writing Contest API' })
     }
 
     const sql = await getSql()
@@ -800,11 +800,7 @@ module.exports = async function handler(req, res) {
       if (district_code) results = results.filter(r => String(r.district_code).trim() === String(district_code).trim())
 
       if (results.length === 0) {
-        return sendJson(res, 404, { 
-          success: false, 
-          message: '未找到匹配的考场信息', 
-          debug: { student_name, school, district_code, ticket_number, total_rows } 
-        })
+        return sendJson(res, 404, { success: false, message: '未找到匹配的考场信息' })
       }
       
       return sendJson(res, 200, { success: true, data: results })
@@ -878,7 +874,7 @@ module.exports = async function handler(req, res) {
       return sendJson(res, 200, { success: true, message: '删除成功' })
     }
 
-    return sendJson(res, 404, { success: false, message: 'Not found', debug: { reqUrl: req.url, segments, query: req.query } })
+    return sendJson(res, 404, { success: false, message: 'Not found', debug: { segments, reqUrl: req.url, query: req.query } })
   } catch (error) {
     const message = error?.code === 'MISSING_DATABASE_URL' ? error.message : 'Internal server error'
     const detail = process.env.NODE_ENV === 'development' ? error?.message : undefined
