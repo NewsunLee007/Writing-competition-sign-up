@@ -44,16 +44,22 @@ const ExamRoomQueryPage: React.FC = () => {
   const handleQuery = async (e: React.FormEvent) => {
     e.preventDefault()
     
+    let queryParams: any = {}
+
     if (queryType === 'student') {
       if (!studentName.trim()) {
         toast.error('请输入学生姓名')
         return
       }
+      queryParams.student_name = studentName.trim()
+      if (ticketNumber.trim()) queryParams.ticket_number = ticketNumber.trim()
     } else {
       if (!schoolName.trim() && !districtCode) {
         toast.error('请输入学校名称或选择学区')
         return
       }
+      if (schoolName.trim()) queryParams.school = schoolName.trim()
+      if (districtCode) queryParams.district_code = districtCode
     }
 
     setIsLoading(true)
@@ -61,12 +67,7 @@ const ExamRoomQueryPage: React.FC = () => {
     setHasQueried(true)
     
     try {
-      const response = await apiService.queryExamRoom({
-        ticket_number: ticketNumber.trim(),
-        student_name: studentName.trim(),
-        school: schoolName.trim(),
-        district_code: districtCode
-      })
+      const response = await apiService.queryExamRoom(queryParams)
       
       if (response.success && response.data) {
         setResults(Array.isArray(response.data) ? response.data : [response.data])
@@ -86,9 +87,11 @@ const ExamRoomQueryPage: React.FC = () => {
   }
 
   const handleReset = () => {
-    setResult(null)
+    setResults([])
     setTicketNumber('')
     setStudentName('')
+    setSchoolName('')
+    setDistrictCode('')
   }
 
   return (
