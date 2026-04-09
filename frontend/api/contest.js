@@ -761,7 +761,7 @@ export default async function handler(req, res) {
       await ensureRegistrationColumns(sql)
 
       let results = await sql`
-        SELECT r.ticket_number, r.student_name, r.school, r.exam_room, d.name as district_name
+        SELECT r.ticket_number, r.student_name, r.school, r.exam_room, r.district_code, d.name as district_name
         FROM registrations r
         LEFT JOIN districts d ON r.district_code = d.code
       `
