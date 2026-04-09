@@ -856,7 +856,7 @@ module.exports = async function handler(req, res) {
       return sendJson(res, 200, { success: true, message: '删除成功' })
     }
 
-    return sendJson(res, 404, { success: false, message: 'Not found' })
+    return sendJson(res, 404, { success: false, message: 'Not found', debug: { pathStr, segments, query: req.query } })
   } catch (error) {
     const message = error?.code === 'MISSING_DATABASE_URL' ? error.message : 'Internal server error'
     const detail = process.env.NODE_ENV === 'development' ? error?.message : undefined
