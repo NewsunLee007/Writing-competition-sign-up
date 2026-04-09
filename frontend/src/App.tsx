@@ -4,6 +4,7 @@ import Layout from './components/Layout'
 import HomePage from './pages/HomePage'
 import RegistrationPage from './pages/RegistrationPage'
 import DownloadPage from './pages/DownloadPage'
+import ExamRoomQueryPage from './pages/ExamRoomQueryPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 function App() {
@@ -14,6 +15,7 @@ function App() {
           <Route index element={<HomePage />} />
           <Route path="registration" element={<RegistrationPage />} />
           <Route path="download" element={<DownloadPage />} />
+          <Route path="query-room" element={<ExamRoomQueryPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>

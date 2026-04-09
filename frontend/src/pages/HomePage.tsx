@@ -37,9 +37,12 @@ const HomePage: React.FC = () => {
               </div>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
-                <Link to="/registration" className="btn-primary px-8 py-4 text-base">
-                  进入报名中心
+                <Link to="/query-room" className="btn-primary px-8 py-4 text-base">
+                  考场查询入口
                   <ChevronRight className="h-5 w-5" />
+                </Link>
+                <Link to="/registration" className="btn-secondary px-8 py-4 text-base">
+                  进入报名中心
                 </Link>
                 <Link to="/download" className="btn-secondary px-8 py-4 text-base">
                   下载准考证 / 批量导出

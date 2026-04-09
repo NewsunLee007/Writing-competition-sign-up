@@ -342,6 +342,16 @@ class ApiService {
     return this.request<ClientContext>('/contest/visitor/context')
   }
 
+  // 查询考场信息
+  async queryExamRoom(params: { ticket_number?: string; student_name?: string; school?: string; district_code?: string }): Promise<ApiResponse<any>> {
+    const queryParams = new URLSearchParams()
+    if (params.ticket_number) queryParams.append('ticket_number', params.ticket_number)
+    if (params.student_name) queryParams.append('student_name', params.student_name)
+    if (params.school) queryParams.append('school', params.school)
+    if (params.district_code) queryParams.append('district_code', params.district_code)
+    return this.request<any>(`/contest/registrations/exam-room?${queryParams.toString()}`)
+  }
+
   // 删除报名
   async deleteRegistration(id: number): Promise<ApiResponse<void>> {
     return this.request<void>(`/contest/registrations/${id}`, {
