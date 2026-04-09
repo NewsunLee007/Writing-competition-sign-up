@@ -4,7 +4,7 @@
   "rewrites": [
     {
       "source": "/api/contest/:path*",
-      "destination": "/api/contest?path=:path*&:query*"
+      "destination": "/api/contest?path=:path*"
     },
     {
       "source": "/(.*)",
