@@ -755,36 +755,9 @@ module.exports = async function handler(req, res) {
     if (segments[0] === 'registrations' && segments[1] === 'exam-room' && req.method === 'GET') {
       const { ticket_number, student_name, school, district_code } = req.query || {}
 
-      if (!student_name && !school && !district_code) {
+      if (!student_name && !school && !district_code && !ticket_number) {
         return sendJson(res, 400, { success: false, message: '请提供查询条件' })
       }
-
-      let queryStr = `
-        SELECT r.ticket_number, r.student_name, r.school, r.exam_room, d.name as district_name
-        FROM registrations r
-        LEFT JOIN districts d ON r.district_code = d.code
-        WHERE 1=1
-      `;
-      const queryParams = [];
-
-      if (ticket_number) {
-        queryParams.push(String(ticket_number));
-        queryStr += ` AND r.ticket_number = $${queryParams.length}`;
-      }
-      if (student_name) {
-        queryParams.push(String(student_name));
-        queryStr += ` AND r.student_name = $${queryParams.length}`;
-      }
-      if (school) {
-        queryParams.push(`%${String(school)}%`);
-        queryStr += ` AND r.school LIKE $${queryParams.length}`;
-      }
-      if (district_code) {
-        queryParams.push(String(district_code));
-        queryStr += ` AND r.district_code = $${queryParams.length}`;
-      }
-      
-      queryStr += ` ORDER BY r.exam_room ASC, r.ticket_number ASC`;
 
       // using neon sql syntax
       let results = await sql`
@@ -801,9 +774,6 @@ module.exports = async function handler(req, res) {
       if (results.length === 0) {
         return sendJson(res, 404, { success: false, message: '未找到匹配的考场信息' })
       }
-
-      // Filter out those without exam room if we only want to show arranged ones
-      // But maybe better to show them with "尚未安排" message in frontend
       
       return sendJson(res, 200, { success: true, data: results })
     }
