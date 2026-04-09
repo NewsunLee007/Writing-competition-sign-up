@@ -75,7 +75,7 @@ async function readJsonBody(req) {
 function normalizePath(pathQuery) {
   if (!pathQuery) return ''
   if (Array.isArray(pathQuery)) return pathQuery.join('/')
-  return String(pathQuery)
+  return String(pathQuery).replace(/^\/+/, '') // Remove leading slashes to prevent empty segments
 }
 
 function setCors(res) {
@@ -760,20 +760,20 @@ module.exports = async function handler(req, res) {
       }
 
       // Ensure columns exist before querying
-      await ensureRegistrationColumns(sql);
+      await ensureRegistrationColumns(sql)
 
       // using neon sql syntax
       let results = await sql`
         SELECT r.ticket_number, r.student_name, r.school, r.exam_room, d.name as district_name
         FROM registrations r
         LEFT JOIN districts d ON r.district_code = d.code
-      `;
+      `
 
-      if (ticket_number) results = results.filter(r => String(r.ticket_number) === String(ticket_number));
+      if (ticket_number) results = results.filter(r => String(r.ticket_number) === String(ticket_number))
       // Relaxed exact match for student_name to allow spaces/trim issues and partial matches
-      if (student_name) results = results.filter(r => r.student_name && String(r.student_name).includes(String(student_name).trim()));
-      if (school) results = results.filter(r => r.school && String(r.school).includes(String(school).trim()));
-      if (district_code) results = results.filter(r => String(r.district_code) === String(district_code));
+      if (student_name) results = results.filter(r => r.student_name && String(r.student_name).includes(String(student_name).trim()))
+      if (school) results = results.filter(r => r.school && String(r.school).includes(String(school).trim()))
+      if (district_code) results = results.filter(r => String(r.district_code) === String(district_code))
 
       if (results.length === 0) {
         return sendJson(res, 404, { success: false, message: '未找到匹配的考场信息' })
