@@ -800,7 +800,8 @@ module.exports = async function handler(req, res) {
       if (district_code) results = results.filter(r => String(r.district_code).trim() === String(district_code).trim())
 
       if (results.length === 0) {
-        return sendJson(res, 404, { success: false, message: '未找到匹配的考场信息' })
+        // Return 200 instead of 404 to avoid console errors when no students are found
+        return sendJson(res, 200, { success: true, data: [], message: '未找到匹配的考场信息' })
       }
       
       return sendJson(res, 200, { success: true, data: results })
