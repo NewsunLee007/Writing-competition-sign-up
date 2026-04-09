@@ -751,6 +751,33 @@ export default async function handler(req, res) {
       return sendJson(res, 200, { success: true, message: '报名信息已更新', data: updated[0] })
     }
 
+    if (segments[0] === 'registrations' && segments[1] === 'exam-room' && req.method === 'GET') {
+      const { ticket_number, student_name, school, district_code } = req.query || {}
+
+      if (!student_name && !school && !district_code && !ticket_number) {
+        return sendJson(res, 400, { success: false, message: '请提供查询条件' })
+      }
+
+      await ensureRegistrationColumns(sql)
+
+      let results = await sql`
+        SELECT r.ticket_number, r.student_name, r.school, r.exam_room, d.name as district_name
+        FROM registrations r
+        LEFT JOIN districts d ON r.district_code = d.code
+      `
+
+      if (ticket_number) results = results.filter(r => String(r.ticket_number).trim() === String(ticket_number).trim())
+      if (student_name) results = results.filter(r => r.student_name && String(r.student_name).includes(String(student_name).trim()))
+      if (school) results = results.filter(r => r.school && String(r.school).includes(String(school).trim()))
+      if (district_code) results = results.filter(r => String(r.district_code).trim() === String(district_code).trim())
+
+      if (results.length === 0) {
+        return sendJson(res, 200, { success: true, data: [], message: '未找到匹配的考场信息' })
+      }
+      
+      return sendJson(res, 200, { success: true, data: results })
+    }
+
     if (segments[0] === 'registrations' && segments[1] === 'search' && req.method === 'GET') {
       const { ticket_number, student_name, school } = req.query || {}
 
@@ -819,7 +846,7 @@ export default async function handler(req, res) {
       return sendJson(res, 200, { success: true, message: '删除成功' })
     }
 
-    return sendJson(res, 404, { success: false, message: 'Not found' })
+    return sendJson(res, 404, { success: false, message: 'Not found', debug: { segments, reqUrl: req.url, query: req.query } })
   } catch (error) {
     const message = error?.code === 'MISSING_DATABASE_URL' ? error.message : 'Internal server error'
     const detail = process.env.NODE_ENV === 'development' ? error?.message : undefined
