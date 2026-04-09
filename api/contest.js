@@ -78,6 +78,27 @@ function normalizePath(pathQuery) {
   return String(pathQuery).replace(/^\/+/, '') // Remove leading slashes to prevent empty segments
 }
 
+function getSegmentsFromReq(req) {
+  // If vercel rewrites /api/contest/foo/bar to /api/contest?path=foo/bar
+  if (req.query?.path) {
+    return normalizePath(req.query.path).split('/').filter(Boolean)
+  }
+  
+  // Direct access via /api/contest/foo/bar without rewrite (e.g. localhost)
+  // req.url might look like /api/contest/registrations/exam-room?student_name=xxx
+  try {
+    const url = new URL(req.url, `http://${req.headers.host}`)
+    let pathname = url.pathname
+    // Strip the /api/contest prefix if it exists
+    if (pathname.startsWith('/api/contest')) {
+      pathname = pathname.substring('/api/contest'.length)
+    }
+    return normalizePath(pathname).split('/').filter(Boolean)
+  } catch (e) {
+    return []
+  }
+}
+
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,DELETE,PATCH,OPTIONS')
@@ -260,12 +281,11 @@ module.exports = async function handler(req, res) {
   setCors(res)
   if (req.method === 'OPTIONS') return sendJson(res, 204, {})
 
-  const pathStr = normalizePath(req.query?.path)
-  const segments = pathStr.split('/').filter(Boolean)
+  const segments = getSegmentsFromReq(req)
 
   try {
     if (segments.length === 0) {
-      return sendJson(res, 200, { success: true, message: 'Writing Contest API' })
+      return sendJson(res, 200, { success: true, message: 'Writing Contest API', reqUrl: req.url, segments })
     }
 
     const sql = await getSql()
@@ -858,7 +878,7 @@ module.exports = async function handler(req, res) {
       return sendJson(res, 200, { success: true, message: '删除成功' })
     }
 
-    return sendJson(res, 404, { success: false, message: 'Not found', debug: { pathStr, segments, query: req.query } })
+    return sendJson(res, 404, { success: false, message: 'Not found', debug: { reqUrl: req.url, segments, query: req.query } })
   } catch (error) {
     const message = error?.code === 'MISSING_DATABASE_URL' ? error.message : 'Internal server error'
     const detail = process.env.NODE_ENV === 'development' ? error?.message : undefined
