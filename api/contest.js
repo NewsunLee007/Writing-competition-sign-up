@@ -272,10 +272,12 @@ module.exports = async function handler(req, res) {
 
     if (segments[0] === 'health' && req.method === 'GET') {
       await sql`SELECT NOW()`
+      const countRows = await sql`SELECT COUNT(*)::int AS count FROM registrations`
       return sendJson(res, 200, {
         success: true,
         message: 'Writing Contest API is running',
         timestamp: new Date().toISOString(),
+        registrations_count: countRows[0]?.count || 0
       })
     }
 
